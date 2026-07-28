@@ -725,11 +725,10 @@ let yMinA = -300, yMaxA = 0;
 
 function drawFullRange() {
   const ctx = frCtx;
-  const viewXmax = Math.max(frXmax(), 0.5) * 1.2;
   const pts = [];
   const N_PTS = 4000;
   for (let i = 0; i < N_PTS; i++) {
-    const frac = (i / (N_PTS - 1)) * viewXmax;
+    const frac = (i / (N_PTS - 1)) * 0.5;
     const f = frac * P.fMOD;
     if (cascadeMode) {
       const stages = sincStages.map((s, i) => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, stageFmod(i)), 1e-30)));
@@ -1098,6 +1097,9 @@ frCanvas.addEventListener('mousemove', e => {
     const dy = (e.clientY - frDrag.sy) / plotH * yRange;
     frZoom.xMin = frDrag.sxMin + dx;
     frZoom.xMax = frDrag.sxMax + dx;
+    if (frZoom.xMin < 0) { frZoom.xMax -= frZoom.xMin; frZoom.xMin = 0; }
+    if (frZoom.xMax > 0.5) { frZoom.xMin -= (frZoom.xMax - 0.5); frZoom.xMax = 0.5; }
+    if (frZoom.xMin < 0) frZoom.xMin = 0;
     frZoom.yMin = frDrag.syMin + dy;
     frZoom.yMax = frDrag.syMax + dy;
     syncFRinputs();
@@ -1129,6 +1131,9 @@ function wheelZoom(canvas, zoom, e, getDefaultXmax, getDefaultYmin, getDefaultYm
   const newYT = yMax0 - my * (yMax0 - yMin0) * (1 - 1 / factor);
   zoom.xMin = newXL;
   zoom.xMax = newXR;
+  if (zoom.xMin < 0) { zoom.xMax -= zoom.xMin; zoom.xMin = 0; }
+  if (zoom.xMax > 0.5) { zoom.xMin -= (zoom.xMax - 0.5); zoom.xMax = 0.5; }
+  if (zoom.xMin < 0) zoom.xMin = 0;
   zoom.yMin = newYB;
   zoom.yMax = newYT;
   syncInputs();
