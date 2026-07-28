@@ -1109,7 +1109,7 @@ function wheelZoom(canvas, zoom, e, getDefaultXmax, getDefaultYmin, getDefaultYm
   const my = (e.clientY - r.top - MT) / plotH;
   const xMax = getDefaultXmax();
   const [yMin0, yMax0] = [zoom.yMin !== null ? zoom.yMin : getDefaultYmin(), zoom.yMax !== null ? zoom.yMax : getDefaultYmax()];
-  const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+  const factor = e.deltaY > 0 ? 1 / 1.15 : 1.15;
   const xLo = zoom.xMin, xHi = xMax;
   const newXL = xLo + (mx) * (xHi - xLo) * (1 - 1 / factor);
   const newXR = xHi - (1 - mx) * (xHi - xLo) * (1 - 1 / factor);
