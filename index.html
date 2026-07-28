@@ -1041,16 +1041,23 @@ let pbDrag = null, frDrag = null;
 
 pbCanvas.addEventListener('mousedown', e => {
   const r = pbCanvas.getBoundingClientRect();
-  pbDrag = { sx: e.clientX, sy: e.clientY, sxMin: pbZoom.xMin, sxMax: pbXmax(), syMin: pbZoom.yMin, syMax: pbYrange()[1] };
+  const pbSyMin = pbZoom.yMin !== null ? pbZoom.yMin : YMIN;
+  const pbSyMax = pbZoom.yMax !== null ? pbZoom.yMax : YMAX;
+  pbDrag = { sx: e.clientX, sy: e.clientY, sxMin: pbZoom.xMin, sxMax: pbXmax(), syMin: pbSyMin, syMax: pbSyMax };
   pbCanvas.style.cursor = 'grabbing';
 });
 pbCanvas.addEventListener('mousemove', e => {
   if (pbDrag) {
     const plotW = W - ML - MR;
+    const plotH = H - MT - MB;
     const xRange = pbDrag.sxMax - pbDrag.sxMin;
+    const yRange = pbDrag.syMax - pbDrag.syMin;
     const dx = -(e.clientX - pbDrag.sx) / plotW * xRange;
+    const dy = (e.clientY - pbDrag.sy) / plotH * yRange;
     pbZoom.xMin = pbDrag.sxMin + dx;
     pbZoom.xMax = pbDrag.sxMax + dx;
+    pbZoom.yMin = pbDrag.syMin + dy;
+    pbZoom.yMax = pbDrag.syMax + dy;
     syncPBinputs();
     drawPassband();
     return;
@@ -1058,16 +1065,23 @@ pbCanvas.addEventListener('mousemove', e => {
   seekPB(e);
 });
 frCanvas.addEventListener('mousedown', e => {
-  frDrag = { sx: e.clientX, sy: e.clientY, sxMin: frZoom.xMin, sxMax: frXmax(), syMin: frZoom.yMin, syMax: frYrange()[1] };
+  const frSyMin = frZoom.yMin !== null ? frZoom.yMin : yMinA;
+  const frSyMax = frZoom.yMax !== null ? frZoom.yMax : yMaxA;
+  frDrag = { sx: e.clientX, sy: e.clientY, sxMin: frZoom.xMin, sxMax: frXmax(), syMin: frSyMin, syMax: frSyMax };
   frCanvas.style.cursor = 'grabbing';
 });
 frCanvas.addEventListener('mousemove', e => {
   if (frDrag) {
     const plotW = W - ML - MR;
+    const plotH = H - MT - MB;
     const xRange = frDrag.sxMax - frDrag.sxMin;
+    const yRange = frDrag.syMax - frDrag.syMin;
     const dx = -(e.clientX - frDrag.sx) / plotW * xRange;
+    const dy = (e.clientY - frDrag.sy) / plotH * yRange;
     frZoom.xMin = frDrag.sxMin + dx;
     frZoom.xMax = frDrag.sxMax + dx;
+    frZoom.yMin = frDrag.syMin + dy;
+    frZoom.yMax = frDrag.syMax + dy;
     syncFRinputs();
     drawFullRange();
     return;
