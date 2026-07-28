@@ -200,11 +200,15 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
       <canvas id="fullrangeCanvas" width="1100" height="400" style="width:100%;display:block;cursor:crosshair;"></canvas>
       <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--dim);">
         <span>X:</span>
+        <input type="range" id="frXminSlider" min="0" max="0.5" step="0.001" style="width:100px;accent-color:var(--accent);">
         <input type="number" id="frXmin" style="width:72px;" step="any"> ~
         <input type="number" id="frXmax" style="width:72px;" step="any">
+        <input type="range" id="frXmaxSlider" min="0" max="0.5" step="0.001" style="width:100px;accent-color:var(--accent);">
         <span>Y (dB):</span>
+        <input type="range" id="frYminSlider" min="-300" max="0" step="1" style="width:80px;accent-color:var(--accent);">
         <input type="number" id="frYmin" style="width:72px;" step="any"> ~
         <input type="number" id="frYmax" style="width:72px;" step="any">
+        <input type="range" id="frYmaxSlider" min="-300" max="100" step="1" style="width:80px;accent-color:var(--accent);">
         <button class="ghost-btn" id="frResetZoom" style="font-size:11px;">重置缩放</button>
         <span style="margin-left:auto;font-size:11px;">滚轮缩放 · 拖拽平移</span>
       </div>
@@ -1039,6 +1043,10 @@ function syncFRinputs() {
   const [ylo, yhi] = frYrange();
   document.getElementById('frYmin').value = ylo.toFixed(1);
   document.getElementById('frYmax').value = yhi.toFixed(1);
+  document.getElementById('frXminSlider').value = frZoom.xMin;
+  document.getElementById('frXmaxSlider').value = frXmax();
+  document.getElementById('frYminSlider').value = Math.max(-300, Math.min(0, ylo));
+  document.getElementById('frYmaxSlider').value = Math.max(-300, Math.min(100, yhi));
 }
 
 function seekPB(e) {
@@ -1151,10 +1159,15 @@ document.getElementById('pbXmin').addEventListener('change', e => { pbZoom.xMin 
 document.getElementById('pbXmax').addEventListener('change', e => { pbZoom.xMax = parseFloat(e.target.value) || passbandXmax(); drawPassband(); });
 document.getElementById('pbYmin').addEventListener('change', e => { pbZoom.yMin = parseFloat(e.target.value); drawPassband(); });
 document.getElementById('pbYmax').addEventListener('change', e => { pbZoom.yMax = parseFloat(e.target.value); drawPassband(); });
-document.getElementById('frXmin').addEventListener('change', e => { frZoom.xMin = parseFloat(e.target.value) || 0; drawFullRange(); });
-document.getElementById('frXmax').addEventListener('change', e => { frZoom.xMax = parseFloat(e.target.value) || frDefaultXmax(); drawFullRange(); });
-document.getElementById('frYmin').addEventListener('change', e => { frZoom.yMin = parseFloat(e.target.value); drawFullRange(); });
-document.getElementById('frYmax').addEventListener('change', e => { frZoom.yMax = parseFloat(e.target.value); drawFullRange(); });
+document.getElementById('frXmin').addEventListener('change', e => { frZoom.xMin = parseFloat(e.target.value) || 0; syncFRinputs(); drawFullRange(); });
+document.getElementById('frXmax').addEventListener('change', e => { frZoom.xMax = parseFloat(e.target.value) || frDefaultXmax(); syncFRinputs(); drawFullRange(); });
+document.getElementById('frYmin').addEventListener('change', e => { frZoom.yMin = parseFloat(e.target.value); syncFRinputs(); drawFullRange(); });
+document.getElementById('frYmax').addEventListener('change', e => { frZoom.yMax = parseFloat(e.target.value); syncFRinputs(); drawFullRange(); });
+
+document.getElementById('frXminSlider').addEventListener('input', e => { frZoom.xMin = parseFloat(e.target.value); document.getElementById('frXmin').value = frZoom.xMin.toFixed(4); drawFullRange(); });
+document.getElementById('frXmaxSlider').addEventListener('input', e => { frZoom.xMax = parseFloat(e.target.value); document.getElementById('frXmax').value = frZoom.xMax.toFixed(4); drawFullRange(); });
+document.getElementById('frYminSlider').addEventListener('input', e => { frZoom.yMin = parseFloat(e.target.value); document.getElementById('frYmin').value = frZoom.yMin.toFixed(1); drawFullRange(); });
+document.getElementById('frYmaxSlider').addEventListener('input', e => { frZoom.yMax = parseFloat(e.target.value); document.getElementById('frYmax').value = frZoom.yMax.toFixed(1); drawFullRange(); });
 
 document.getElementById('pbResetZoom').onclick = () => { pbZoom.xMin = 0; pbZoom.xMax = null; pbZoom.yMin = null; pbZoom.yMax = null; syncPBinputs(); drawPassband(); };
 document.getElementById('frResetZoom').onclick = () => { frZoom.xMin = 0; frZoom.xMax = null; frZoom.yMin = null; frZoom.yMax = null; syncFRinputs(); drawFullRange(); };
