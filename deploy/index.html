@@ -134,7 +134,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
       <button class="ghost-btn active" id="viewPassband">通带视图</button>
       <button class="ghost-btn" id="viewFull">完整响应</button>
     </div>
-    <div class="ctl-group" id="freqModeGroup" style="display:none;">
+    <div class="ctl-group" id="freqModeGroup">
       <button class="ghost-btn active" id="freqNorm">归一化频率</button>
       <button class="ghost-btn" id="freqReal">实际频率</button>
     </div>
@@ -651,20 +651,43 @@ let hoverFR_X = null;
 
 function drawFullRange() {
   const ctx = frCtx;
-  const curve = computeCurveFullRange();
-  const frXmax = 0.5;
+  const Dtot = totalDecimation();
 
-  // 自动 Y 范围
+  /* ── 自适应 x 轴范围：显示 2~10 个旁瓣 ── */
+  let frXmax;
+  const rawMax = 10 / Dtot;
+  if (rawMax <= 0.5) {
+    frXmax = Math.max(2 / Dtot, Math.min(rawMax, 0.5));
+  } else {
+    frXmax = 0.5;
+  }
+
+  /* ── 用自适应范围重新计算曲线 ── */
+  const pts = [];
+  const N_PTS = 2000;
+  for (let i = 0; i < N_PTS; i++) {
+    const frac = (i / (N_PTS - 1)) * frXmax;
+    const f = frac * P.fMOD;
+    if (cascadeMode) {
+      const stages = sincStages.map(s => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, P.fMOD), 1e-30)));
+      const total = stages.reduce((a, b) => a + b, 0);
+      pts.push({ x: frac, stages, sinc: total });
+    } else {
+      pts.push({ x: frac, sinc: sincN_dB(f) });
+    }
+  }
+
+  /* ── 自动 Y 范围 ── */
   let yMin = Infinity, yMax = -Infinity;
-  for (const p of curve) {
+  for (const p of pts) {
     if (p.sinc < yMin) yMin = p.sinc;
     if (p.sinc > yMax) yMax = p.sinc;
   }
   let lobeMin = Infinity;
-  const Dtot = totalDecimation();
   for (let k = 1; k < Math.min(Math.floor(Dtot / 2), 20); k++) {
     for (let i = 0; i < 100; i++) {
       const frac = (k + i / 100) / Dtot;
+      if (frac > frXmax) break;
       const f = frac * P.fMOD;
       const db = effectiveSinc_dB(f);
       if (db < lobeMin) lobeMin = db;
@@ -674,28 +697,33 @@ function drawFullRange() {
   YMAX = Math.ceil((yMax + 3) / 5) * 5;
   YMIN = Math.floor((lobeMin - 8) / 10) * 10;
 
+  /* ── 辅助映射 ── */
+  function xPx(frac) { return ML + (frac / frXmax) * (W - ML - MR); }
+  function yPx(db) { return MT + (YMAX - db) / (YMAX - YMIN) * (H - MT - MB); }
+
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = C.canvasBg;
   ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = C.canvasPlot;
   ctx.fillRect(ML, MT, W - ML - MR, H - MT - MB);
 
-  // 网格
+  /* ── 网格（自适应间距） ── */
   ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
-  for (let x = 0; x <= frXmax; x += 0.05) {
-    const px = ML + (x / frXmax) * (W - ML - MR);
+  const xStep = frXmax <= 0.05 ? 0.005 : frXmax <= 0.1 ? 0.01 : frXmax <= 0.2 ? 0.02 : 0.05;
+  for (let x = 0; x <= frXmax + 1e-9; x += xStep) {
+    const px = xPx(x);
     ctx.beginPath(); ctx.moveTo(px, MT); ctx.lineTo(px, H - MB); ctx.stroke();
   }
   const yRange = YMAX - YMIN;
   const dbStep = yRange > 100 ? 20 : yRange > 20 ? 10 : 5;
   for (let db = Math.ceil(YMIN / dbStep) * dbStep; db <= YMAX; db += dbStep) {
-    const y = MT + (YMAX - db) / (YMAX - YMIN) * (H - MT - MB);
+    const y = yPx(db);
     if (y < MT || y > H - MB) continue;
     ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + (W - ML - MR), y); ctx.stroke();
   }
 
-  // 0 dB 参考线
-  const y0 = MT + (YMAX - 0) / (YMAX - YMIN) * (H - MT - MB);
+  /* ── 0 dB 参考线 ── */
+  const y0 = yPx(0);
   if (y0 >= MT && y0 <= H - MB) {
     ctx.strokeStyle = C.comp; ctx.lineWidth = 1;
     ctx.setLineDash([5, 5]);
@@ -703,7 +731,7 @@ function drawFullRange() {
     ctx.setLineDash([]);
   }
 
-  // 级联模式：绘制各级虚线
+  /* ── 级联模式：绘制各级虚线 ── */
   if (cascadeMode) {
     for (let si = 0; si < sincStages.length; si++) {
       ctx.strokeStyle = stageColors[si % stageColors.length];
@@ -711,12 +739,9 @@ function drawFullRange() {
       ctx.setLineDash([6, 4]);
       ctx.beginPath();
       let started = false;
-      for (let i = 0; i < 4000; i++) {
-        const frac = (i / 3999) * frXmax;
-        const f = frac * P.fMOD;
-        const db = p_stagesAtFreq(f, si);
-        const px = ML + (frac / frXmax) * (W - ML - MR);
-        const py = MT + (YMAX - db) / (YMAX - YMIN) * (H - MT - MB);
+      for (const p of pts) {
+        const db = p.stages[si];
+        const px = xPx(p.x), py = yPx(db);
         if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
         if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
       }
@@ -725,68 +750,84 @@ function drawFullRange() {
     }
   }
 
-  // 总响应曲线
+  /* ── 总响应曲线 ── */
   ctx.strokeStyle = C.sinc; ctx.lineWidth = cascadeMode ? 2.5 : 2;
   ctx.beginPath();
   let started = false;
-  for (const p of curve) {
-    const px = ML + (p.x / frXmax) * (W - ML - MR);
-    const py = MT + (YMAX - p.sinc) / (YMAX - YMIN) * (H - MT - MB);
+  for (const p of pts) {
+    const px = xPx(p.x), py = yPx(p.sinc);
     if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
     if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
   }
   ctx.stroke();
 
-  // 零点标注（前5个）
-  const showZeros = Math.min(5, Math.floor(Dtot / 2));
+  /* ── 零点标注（前 3 个，跟随波形） ── */
+  const showZeros = Math.min(3, Math.floor(Dtot / 2));
   ctx.textAlign = 'center';
   for (let k = 1; k <= showZeros; k++) {
     const frac = k / Dtot;
-    const px = ML + (frac / frXmax) * (W - ML - MR);
-    ctx.strokeStyle = 'rgba(8,145,178,.5)'; ctx.lineWidth = 1.5;
-    ctx.setLineDash([5, 5]);
+    if (frac > frXmax) break;
+    const px = xPx(frac);
+    /* 竖线 */
+    ctx.strokeStyle = 'rgba(8,145,178,.45)'; ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(px, MT); ctx.lineTo(px, H - MB); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.font = 'bold 12px sans-serif';
+    /* 在曲线上找最近点来放标记 */
+    let bestIdx = 0, bestDist = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const d = Math.abs(pts[i].x - frac);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    const py = yPx(pts[bestIdx].sinc);
+    const markerY = (py >= MT && py <= H - MB) ? py : MT + 8;
     ctx.fillStyle = '#0891b2';
-    ctx.fillText('零点 ' + k, px, MT - 6);
-    const freq = frac * P.fMOD;
-    ctx.font = '11px Consolas, monospace';
-    ctx.fillStyle = '#155e75';
-    ctx.fillText(formatFreq(freq), px, MT + 12);
+    ctx.beginPath(); ctx.arc(px, markerY, 4, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = isDark ? '#0b0f14' : '#fff';
+    ctx.beginPath(); ctx.arc(px, markerY, 1.5, 0, 2 * Math.PI); ctx.fill();
+    /* 标签：放在标记上方 */
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillStyle = '#0891b2';
+    ctx.fillText('零点' + k, px, markerY - 10);
   }
 
-  // 轴标签
+  /* ── 轴标签 ── */
   ctx.fillStyle = C.dim; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
-  for (let x = 0; x <= frXmax; x += 0.05) {
-    const freq = x * P.fMOD;
+  const labelStep = xStep;
+  for (let x = 0; x <= frXmax + 1e-9; x += labelStep) {
+    const px = xPx(x);
     let label;
-    if (freq >= 1e6) label = (freq / 1e6).toFixed(1) + ' MHz';
-    else if (freq >= 1e3) label = (freq / 1e3).toFixed(0) + ' kHz';
-    else label = freq.toFixed(0) + ' Hz';
-    const px = ML + (x / frXmax) * (W - ML - MR);
+    if (freqMode === 'norm') {
+      label = x.toFixed(x < 0.01 ? 3 : x < 0.1 ? 2 : 1);
+    } else {
+      const freq = x * P.fMOD;
+      if (freq >= 1e6) label = (freq / 1e6).toFixed(freq >= 0.1e6 ? 1 : 2) + ' MHz';
+      else if (freq >= 1e3) label = (freq / 1e3).toFixed(freq >= 10e3 ? 0 : 1) + ' kHz';
+      else label = freq.toFixed(freq >= 100 ? 0 : 1) + ' Hz';
+    }
     ctx.fillText(label, px, H - MB + 18);
   }
-  ctx.fillText('频率', ML + (W - ML - MR) / 2, H - 2);
+  const xLabel = freqMode === 'norm' ? '归一化频率 f / f_MOD' : '频率';
+  ctx.fillText(xLabel, ML + (W - ML - MR) / 2, H - 2);
 
   ctx.textAlign = 'right';
   const yLabelStep2 = yRange > 100 ? 40 : yRange > 20 ? 20 : 10;
   for (let db = Math.ceil(YMIN / yLabelStep2) * yLabelStep2; db <= YMAX; db += yLabelStep2) {
-    const y = MT + (YMAX - db) / (YMAX - YMIN) * (H - MT - MB);
+    const y = yPx(db);
     if (y < MT || y > H - MB) continue;
     ctx.fillText(db.toFixed(0) + ' dB', ML - 8, y + 4);
   }
 
-  // 游标
+  /* ── 游标 ── */
   if (hoverFR_X !== null && hoverFR_X >= 0 && hoverFR_X <= frXmax) {
     const hf = hoverFR_X * P.fMOD;
     const hDb = effectiveSinc_dB(hf);
-    const hx = ML + (hoverFR_X / frXmax) * (W - ML - MR);
+    const hx = xPx(hoverFR_X);
     ctx.strokeStyle = isDark ? 'rgba(121,192,255,.4)' : 'rgba(37,99,235,.3)';
     ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(hx, MT); ctx.lineTo(hx, H - MB); ctx.stroke();
     ctx.setLineDash([]);
-    const pyS = MT + (YMAX - hDb) / (YMAX - YMIN) * (H - MT - MB);
+    const pyS = yPx(hDb);
     if (pyS >= MT && pyS <= H - MB) {
       ctx.fillStyle = C.sinc;
       ctx.shadowColor = C.sinc; ctx.shadowBlur = 10;
@@ -802,7 +843,11 @@ function drawFullRange() {
     ctx.beginPath(); ctx.roundRect(tipX, tipY, tipW, tipH, 6); ctx.fill(); ctx.stroke();
     ctx.font = '12px Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillStyle = C.dim;
-    ctx.fillText('频率 = ' + formatFreq(hf), tipX + 10, tipY + 20);
+    if (freqMode === 'norm') {
+      ctx.fillText('f/f_MOD = ' + hoverFR_X.toFixed(4), tipX + 10, tipY + 20);
+    } else {
+      ctx.fillText('频率 = ' + formatFreq(hf), tipX + 10, tipY + 20);
+    }
     let yOff = 38;
     if (cascadeMode) {
       for (let si = 0; si < sincStages.length; si++) {
@@ -973,14 +1018,18 @@ function seekPB(e) {
 }
 function seekFR(e) {
   const r = frCanvas.getBoundingClientRect();
-  hoverFR_X = Math.max(0, Math.min(0.5, (e.clientX - r.left - ML) / (W - ML - MR) * 0.5));
+  const Dtot = totalDecimation();
+  let frXmax = 0.5;
+  const rawMax = 10 / Dtot;
+  if (rawMax <= 0.5) frXmax = Math.max(2 / Dtot, Math.min(rawMax, 0.5));
+  hoverFR_X = Math.max(0, Math.min(frXmax, (e.clientX - r.left - ML) / (W - ML - MR) * frXmax));
   drawFullRange();
 }
 
 pbCanvas.addEventListener('mousedown', e => { dragging = true; activeDragCanvas = 'pb'; seekPB(e); });
 pbCanvas.addEventListener('mousemove', e => { if (dragging && activeDragCanvas === 'pb') seekPB(e); else if (!dragging) { hoverPB_X = Math.max(0, Math.min(0.55, (e.clientX - pbCanvas.getBoundingClientRect().left - ML) / (W - ML - MR) * 0.55)); drawPassband(); } });
 frCanvas.addEventListener('mousedown', e => { dragging = true; activeDragCanvas = 'fr'; seekFR(e); });
-frCanvas.addEventListener('mousemove', e => { if (dragging && activeDragCanvas === 'fr') seekFR(e); else if (!dragging) { hoverFR_X = Math.max(0, Math.min(0.5, (e.clientX - frCanvas.getBoundingClientRect().left - ML) / (W - ML - MR) * 0.5)); drawFullRange(); } });
+frCanvas.addEventListener('mousemove', e => { if (dragging && activeDragCanvas === 'fr') seekFR(e); else if (!dragging) { const Dtot = totalDecimation(); let fX = 0.5; const rm = 10 / Dtot; if (rm <= 0.5) fX = Math.max(2 / Dtot, Math.min(rm, 0.5)); hoverFR_X = Math.max(0, Math.min(fX, (e.clientX - frCanvas.getBoundingClientRect().left - ML) / (W - ML - MR) * fX)); drawFullRange(); } });
 window.addEventListener('mouseup', () => { dragging = false; activeDragCanvas = null; });
 pbCanvas.addEventListener('mouseleave', () => { if (!dragging) { hoverPB_X = null; drawPassband(); } });
 frCanvas.addEventListener('mouseleave', () => { if (!dragging) { hoverFR_X = null; drawFullRange(); } });
@@ -994,7 +1043,6 @@ function setView(mode) {
   document.getElementById('fullrangeBox').style.display = mode === 'full' ? '' : 'none';
   document.getElementById('kpPanel').style.display = mode === 'passband' ? '' : 'none';
   document.getElementById('showComp').closest('.ctl-group').style.display = mode === 'passband' ? '' : 'none';
-  document.getElementById('freqModeGroup').style.display = mode === 'full' ? '' : 'none';
   if (mode === 'passband') drawPassband();
   else drawFullRange();
 }
@@ -1004,6 +1052,7 @@ function setFreqMode(mode) {
   freqMode = mode;
   document.getElementById('freqNorm').classList.toggle('active', mode === 'norm');
   document.getElementById('freqReal').classList.toggle('active', mode === 'real');
+  drawPassband();
   drawFullRange();
 }
 
