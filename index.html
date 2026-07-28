@@ -388,6 +388,7 @@ function renderCascadeUI() {
       sincStages[idx][field] = Math.max(1, parseInt(this.value) || 1);
       document.getElementById('totalDec').textContent = totalDecimation();
       syncODR();
+      resetFRzoom();
       updateKP(); drawPassband(); drawFullRange();
     };
   });
@@ -399,6 +400,7 @@ function renderCascadeUI() {
       renderCascadeUI();
       document.getElementById('totalDec').textContent = totalDecimation();
       syncODR();
+      resetFRzoom();
       updateKP(); drawPassband(); drawFullRange();
     };
   });
@@ -456,7 +458,7 @@ const Y_FLOOR = -300;
 
 /* ========== 曲线计算（保留兼容） ========== */
 function computeCurvePassband() {
-  const maxX = Math.min(6 / totalDecimation(), 0.55);
+  const maxX = passbandXmax();
   const pts = [];
   for (let i = 0; i < 2000; i++) {
     const r = (i / 1999) * maxX;
@@ -494,8 +496,18 @@ const KEY_FREQS = [0, 0.1, 0.2, 0.3, 0.4, 0.433, 0.5];
 let hoverPB_X = null;
 
 function passbandXmax() {
-  const D = cascadeMode ? sincStages[0].D : P.D;
-  return Math.min(6 / D, 0.55);
+  if (cascadeMode) return 1.1;
+  return Math.min(6 / P.D, 0.55);
+}
+
+function frDefaultXmax() {
+  if (cascadeMode) return Math.min(4 / sincStages[0].D, 0.5);
+  return 0.5;
+}
+
+function resetFRzoom() {
+  frZoom.xMin = 0; frZoom.xMax = null; frZoom.yMin = null; frZoom.yMax = null;
+  syncFRinputs();
 }
 
 function drawPassband() {
@@ -676,7 +688,7 @@ function drawPassband() {
 }
 
 function p_stagesAtFreq(f, si) {
-  return 20 * Math.log10(Math.max(sincN(f, sincStages[si].N, sincStages[si].D, P.fMOD), 1e-30));
+  return 20 * Math.log10(Math.max(sincN(f, sincStages[si].N, sincStages[si].D, stageFmod(si)), 1e-30));
 }
 
 /* ========== 零点检测：扫描曲线找实际 nulls ========== */
@@ -713,11 +725,11 @@ let yMinA = -300, yMaxA = 0;
 
 function drawFullRange() {
   const ctx = frCtx;
-  const xMaxDef = 0.5;
+  const viewXmax = Math.max(frXmax(), 0.5) * 1.2;
   const pts = [];
   const N_PTS = 4000;
   for (let i = 0; i < N_PTS; i++) {
-    const frac = (i / (N_PTS - 1)) * xMaxDef;
+    const frac = (i / (N_PTS - 1)) * viewXmax;
     const f = frac * P.fMOD;
     if (cascadeMode) {
       const stages = sincStages.map((s, i) => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, stageFmod(i)), 1e-30)));
@@ -1008,11 +1020,11 @@ document.getElementById('exportBtn').onclick = () => {
 
 /* ========== 交互 ========== */
 const pbZoom = { xMin: 0, xMax: null, yMin: null, yMax: null };
-const frZoom = { xMin: 0, xMax: 0.5, yMin: null, yMax: null };
+const frZoom = { xMin: 0, xMax: null, yMin: null, yMax: null };
 
 function pbXmax() { return pbZoom.xMax !== null ? pbZoom.xMax : passbandXmax(); }
 function pbYrange() { return [pbZoom.yMin !== null ? pbZoom.yMin : YMIN, pbZoom.yMax !== null ? pbZoom.yMax : YMAX]; }
-function frXmax() { return frZoom.xMax !== null ? frZoom.xMax : 0.5; }
+function frXmax() { return frZoom.xMax !== null ? frZoom.xMax : frDefaultXmax(); }
 function frYrange() { return [frZoom.yMin !== null ? frZoom.yMin : yMinA, frZoom.yMax !== null ? frZoom.yMax : yMaxA]; }
 
 function syncPBinputs() {
@@ -1127,7 +1139,7 @@ pbCanvas.addEventListener('wheel', e => wheelZoom(pbCanvas, pbZoom, e,
   () => pbZoom.xMax !== null ? pbZoom.xMax : passbandXmax(),
   () => YMIN, () => YMAX, syncPBinputs, drawPassband), { passive: false });
 frCanvas.addEventListener('wheel', e => wheelZoom(frCanvas, frZoom, e,
-  () => frZoom.xMax !== null ? frZoom.xMax : 0.5,
+  () => frZoom.xMax !== null ? frZoom.xMax : frDefaultXmax(),
   () => yMinA, () => yMaxA, syncFRinputs, drawFullRange), { passive: false });
 
 document.getElementById('pbXmin').addEventListener('change', e => { pbZoom.xMin = parseFloat(e.target.value) || 0; drawPassband(); });
@@ -1135,12 +1147,12 @@ document.getElementById('pbXmax').addEventListener('change', e => { pbZoom.xMax 
 document.getElementById('pbYmin').addEventListener('change', e => { pbZoom.yMin = parseFloat(e.target.value); drawPassband(); });
 document.getElementById('pbYmax').addEventListener('change', e => { pbZoom.yMax = parseFloat(e.target.value); drawPassband(); });
 document.getElementById('frXmin').addEventListener('change', e => { frZoom.xMin = parseFloat(e.target.value) || 0; drawFullRange(); });
-document.getElementById('frXmax').addEventListener('change', e => { frZoom.xMax = parseFloat(e.target.value) || 0.5; drawFullRange(); });
+document.getElementById('frXmax').addEventListener('change', e => { frZoom.xMax = parseFloat(e.target.value) || frDefaultXmax(); drawFullRange(); });
 document.getElementById('frYmin').addEventListener('change', e => { frZoom.yMin = parseFloat(e.target.value); drawFullRange(); });
 document.getElementById('frYmax').addEventListener('change', e => { frZoom.yMax = parseFloat(e.target.value); drawFullRange(); });
 
 document.getElementById('pbResetZoom').onclick = () => { pbZoom.xMin = 0; pbZoom.xMax = null; pbZoom.yMin = null; pbZoom.yMax = null; syncPBinputs(); drawPassband(); };
-document.getElementById('frResetZoom').onclick = () => { frZoom.xMin = 0; frZoom.xMax = 0.5; frZoom.yMin = null; frZoom.yMax = null; syncFRinputs(); drawFullRange(); };
+document.getElementById('frResetZoom').onclick = () => { frZoom.xMin = 0; frZoom.xMax = null; frZoom.yMin = null; frZoom.yMax = null; syncFRinputs(); drawFullRange(); };
 
 /* ========== 视图切换（保留兼容，但实际两个视图始终显示） ========== */
 function setView(mode) {
@@ -1210,6 +1222,7 @@ document.getElementById('cascadeToggle').onchange = function() {
   document.getElementById('stageInput').closest('.ctl-group').style.display = cascadeMode ? 'none' : '';
   document.getElementById('decInput').closest('.ctl-group').style.display = cascadeMode ? 'none' : '';
   syncODR();
+  resetFRzoom();
   updateKP(); drawPassband(); drawFullRange();
   updateLegend();
 };
@@ -1219,6 +1232,7 @@ document.getElementById('addStageBtn').onclick = function() {
   renderCascadeUI();
   document.getElementById('totalDec').textContent = totalDecimation();
   syncODR();
+  resetFRzoom();
   updateKP(); drawPassband(); drawFullRange();
 };
 
