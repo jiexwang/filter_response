@@ -1,0 +1,1307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sinc⁶ 频率响应 · v2</title>
+<style>
+:root{
+  --bg:#0b0f14; --panel:#131a23; --panel2:#0f151d; --line:#263242;
+  --txt:#e6edf3; --dim:#8b98a9; --accent:#58a6ff;
+  --sinc:#58a6ff; --comp:#3fb950; --total:#f0c674; --target:#ff5555;
+  --grid:rgba(120,140,170,.12); --canvasBg:#0f151d; --canvasPlot:'rgba(255,255,255,.015)';
+}
+.light{
+  --bg:#f5f7fa; --panel:#ffffff; --panel2:#f8f9fb; --line:#dde1e6;
+  --txt:#1a1a2e; --dim:#6b7280; --accent:#2563eb;
+  --sinc:#2563eb; --comp:#16a34a; --total:#d97706; --target:#dc2626;
+  --grid:rgba(0,0,0,.08); --canvasBg:#ffffff; --canvasPlot:'rgba(0,0,0,.02)';
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--txt);font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;padding:24px;line-height:1.6;transition:background .2s,color .2s;}
+.wrap{max-width:1180px;margin:0 auto;}
+header{margin-bottom:18px;}
+header h1{font-size:24px;letter-spacing:1px;}
+header h1 .tag{display:inline-block;font-size:12px;color:#0b0f14;background:var(--accent);border-radius:4px;padding:1px 8px;vertical-align:middle;margin-left:10px;font-weight:700;}
+.light header h1 .tag{color:#fff;}
+header p{color:var(--dim);font-size:13px;margin-top:4px;}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px;transition:background .2s,border-color .2s;}
+.controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:center;}
+.ctl-group{display:flex;align-items:center;gap:8px;}
+.ctl-group label{font-size:13px;color:var(--dim);white-space:nowrap;}
+input[type=range]{width:110px;accent-color:var(--accent);}
+input[type=number]{width:56px;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:6px 4px;font-size:14px;font-family:Consolas,monospace;text-align:center;}
+input[type=number]:focus{outline:none;border-color:var(--accent);}
+.ghost-btn{background:transparent;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;}
+.ghost-btn:hover{border-color:var(--accent);color:var(--accent);}
+.ghost-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(88,166,255,.12);}
+.light .ghost-btn.active{background:rgba(37,99,235,.1);}
+.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim);cursor:pointer;}
+.chk input{accent-color:var(--accent);}
+#waveBox{position:relative;}
+canvas#wave{width:100%;display:block;cursor:crosshair;}
+.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--dim);margin-top:10px;}
+.legend span{display:flex;align-items:center;gap:5px;}
+.sw{display:inline-block;width:18px;height:3px;border-radius:2px;}
+.kp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:10px 0;}
+.kp-item{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;text-align:center;}
+.kp-item .freq{font-size:12px;color:var(--dim);}
+.kp-item .val{font-size:18px;font-weight:bold;margin:3px 0;}
+.kp-item .desc{font-size:11px;color:var(--dim);}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;}
+.step{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .15s;}
+.step:hover{border-color:var(--accent);}
+.step.active{border-color:var(--accent);background:rgba(88,166,255,.06);}
+.light .step.active{background:rgba(37,99,235,.06);}
+.step .st-num{display:inline-block;width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;text-align:center;line-height:24px;margin-right:8px;}
+.step .st-title{font-size:14px;font-weight:700;}
+.step .st-desc{font-size:12px;color:var(--dim);margin-top:6px;line-height:1.6;}
+.step .st-formula{font-family:Consolas,monospace;font-size:12px;color:var(--comp);background:var(--bg);border:1px dashed var(--line);border-radius:6px;padding:8px 10px;margin-top:8px;line-height:1.5;}
+.qc-box{background:var(--panel2);border-left:4px solid #f0a500;border-radius:0 10px 10px 0;padding:16px 18px;}
+.qc-box .qc-t{font-weight:bold;color:#f0a500;margin-bottom:8px;font-size:15px;}
+.qc-box .qc-q{font-size:14px;line-height:1.8;color:var(--txt);margin-bottom:6px;}
+.qc-box .qc-opts{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
+.qc-box .qc-opt{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer;transition:all .15s;}
+.qc-box .qc-opt:hover{border-color:var(--accent);}
+.qc-box .qc-opt.correct{border-color:var(--comp);color:var(--comp);background:rgba(22,163,74,.08);}
+.qc-box .qc-opt.wrong{border-color:var(--target);color:var(--target);background:rgba(220,38,38,.08);}
+.qc-box .qc-explain{font-size:13px;color:var(--dim);margin-top:8px;display:none;line-height:1.6;}
+.qc-box .qc-explain.show{display:block;}
+.formula-box{background:var(--bg);border:1px dashed var(--line);border-radius:8px;padding:16px 20px;margin:10px 0;line-height:1.6;text-align:center;}
+.eq{display:inline-flex;align-items:center;gap:6px;font-family:'Cambria','Times New Roman',serif;font-size:18px;color:var(--txt);}
+.eq-op{font-size:20px;color:var(--dim);margin:0 4px;}
+.eq-r{display:inline-flex;align-items:center;}
+.eq-abs{font-size:28px;font-weight:200;color:var(--dim);margin:0 2px;}
+.eq-frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 6px;}
+.eq-num{padding-bottom:4px;border-bottom:2px solid var(--dim);white-space:nowrap;}
+.eq-den{padding-top:4px;white-space:nowrap;}
+.eq-pow{font-size:20px;vertical-align:super;color:var(--target);margin-left:1px;font-weight:700;}
+.eq sub{font-size:13px;}
+.topnav{display:flex;gap:8px;margin-bottom:16px;align-items:center;}
+.topnav a{color:var(--dim);text-decoration:none;font-size:13px;padding:6px 16px;border:1px solid var(--line);border-radius:8px;transition:all .15s;}
+.topnav a:hover{border-color:var(--accent);color:var(--accent);}
+.topnav a.active{color:var(--accent);border-color:var(--accent);background:rgba(88,166,255,.12);font-weight:700;}
+.light .topnav a.active{background:rgba(37,99,235,.1);}
+.theme-btn{margin-left:auto;background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:8px;padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent);}
+footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
+</style>
+</head>
+<body class="light">
+<div class="wrap">
+  <div class="topnav">
+    <a class="active" id="navSinc" href="javascript:void(0)">Sinc⁶ 频响</a>
+    <a id="navFir" href="javascript:void(0)">FIR 偶对称</a>
+    <button class="theme-btn" id="themeToggle">☀️ 浅色</button>
+  </div>
+
+  <div id="sincSection">
+  <header>
+    <h1>Sinc<sup>N</sup> 频率响应 <span class="tag">交互式讲解</span></h1>
+    <p>从数字滤波器数学到 RTL 实现 · 第一步：理解 Sinc⁶ 的通带滚降</p>
+  </header>
+
+  <!-- 控制区 -->
+  <div class="panel controls">
+    <div class="ctl-group">
+      <label>级数 N</label>
+      <input type="number" id="stageInput" value="6" min="1" max="10" step="1" style="width:56px;">
+    </div>
+    <div class="ctl-group">
+      <label>抽取率 D</label>
+      <input type="number" id="decInput" value="8" min="2" max="1000" step="1" style="width:56px;">
+    </div>
+    <div class="ctl-group">
+      <label>f<sub>MOD</sub></label>
+      <input type="number" id="fmodInput" value="8192" min="1" max="100000" step="1" style="width:72px;">
+      <span style="font-size:12px;color:var(--dim);">kHz</span>
+    </div>
+    <div class="ctl-group">
+      <label>ODR</label>
+      <input type="number" id="odrInput" value="256000" min="1" max="10000000" step="1000" style="width:72px;">
+      <span style="font-size:12px;color:var(--dim);">sps</span>
+    </div>
+    <div class="ctl-group">
+      <button class="ghost-btn active" id="viewPassband">通带视图</button>
+      <button class="ghost-btn" id="viewFull">完整响应</button>
+    </div>
+    <div class="ctl-group" id="freqModeGroup" style="display:none;">
+      <button class="ghost-btn active" id="freqNorm">归一化频率</button>
+      <button class="ghost-btn" id="freqReal">实际频率</button>
+    </div>
+    <div class="ctl-group">
+      <label class="chk">
+        <input type="checkbox" id="showComp" checked> 显示补偿目标
+      </label>
+    </div>
+    <div class="ctl-group">
+      <button class="ghost-btn" id="exportBtn">⬇ 导出 PNG</button>
+    </div>
+  </div>
+
+  <!-- 关键数值 -->
+  <div class="panel" id="kpPanel">
+    <h3 style="font-size:15px;margin-bottom:10px;">关键频点衰减</h3>
+    <div class="kp-grid" id="kpGrid"></div>
+    <div class="formula-box" id="formulaBox"></div>
+  </div>
+
+  <!-- 波形区 -->
+  <div class="panel" id="waveBox">
+    <canvas id="wave" width="1100" height="500"></canvas>
+    <div class="legend" id="legendBar">
+      <span><i class="sw" style="background:var(--sinc);"></i><b style="color:var(--sinc);">Sinc<sup>N</sup></b> 实际响应</span>
+      <span><i class="sw" style="background:var(--target);"></i><b style="color:var(--target);">1/Sinc<sup>N</sup></b> 补偿目标</span>
+      <span><i class="sw" style="background:var(--comp);"></i><b style="color:var(--comp);">0 dB</b> 参考线</span>
+      <span><b style="color:var(--target);">▲</b> 采样标记</span>
+      <span><b style="color:var(--accent);">│</b> 游标（可拖动）</span>
+    </div>
+  </div>
+
+  <!-- 分步讲解 -->
+  <div class="panel">
+    <h3 style="font-size:15px;margin-bottom:12px;">从理论到 RTL 的六步流程</h3>
+    <div class="steps" id="stepsGrid"></div>
+    <div id="stepDetail" style="margin-top:14px;"></div>
+  </div>
+
+  <!-- 知识检验 -->
+  <div class="panel qc-box" id="qcBox">
+    <div class="qc-t">理解检验</div>
+    <div id="qcContent"></div>
+  </div>
+  </div><!-- /sincSection -->
+
+  <!-- FIR 偶对称与线性相位 -->
+  <div class="panel" id="firSection" style="display:none;">
+    <h3 style="font-size:15px;margin-bottom:6px;">FIR 偶对称与线性相位</h3>
+    <p style="font-size:13px;color:var(--dim);margin-bottom:14px;">为什么对称系数 = 线性相位？用旋转向量看懂它。</p>
+
+    <div style="display:flex;gap:16px;flex-wrap:wrap;">
+      <!-- 左：旋转向量图 -->
+      <div style="flex:1;min-width:340px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">旋转向量合成</div>
+        <canvas id="phasorCanvas" width="500" height="360" style="width:100%;display:block;border:1px solid var(--line);border-radius:8px;background:var(--canvasBg);"></canvas>
+        <!-- 系数输入 -->
+        <div style="margin-top:10px;">
+          <div style="font-size:12px;color:var(--dim);margin-bottom:4px;">系数 h[n]（逗号分隔）</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="coeffInput" value="1, 2, 1" style="flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:7px 10px;font-size:14px;font-family:Consolas,monospace;">
+            <button class="ghost-btn" onclick="applyCoeffInput()" style="white-space:nowrap;">应用</button>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">
+            <button class="ghost-btn" onclick="setPreset([1,2,1])" style="font-size:11px;">[1,2,1]</button>
+            <button class="ghost-btn" onclick="setPreset([1,2,0.5])" style="font-size:11px;">[1,2,0.5]</button>
+            <button class="ghost-btn" onclick="setPreset([1,-1])" style="font-size:11px;">[1,-1] 差分</button>
+            <button class="ghost-btn" onclick="setPreset([1,1,1,1])" style="font-size:11px;">[1,1,1,1] 均匀</button>
+            <button class="ghost-btn" onclick="setPreset([1,3,3,1])" style="font-size:11px;">[1,3,3,1] 二项式</button>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <button class="ghost-btn" id="btnPlay" onclick="toggleAnimation()" style="font-size:12px;">▶ 播放动画</button>
+            <button class="ghost-btn" onclick="resetAnimation()" style="font-size:12px;">⟲ 重置</button>
+            <span style="font-size:12px;color:var(--dim);margin-left:auto;">ω = <span id="omegaVal">0.00</span> π</span>
+          </div>
+          <input type="range" id="omegaSlider" min="0" max="200" value="0" style="width:100%;accent-color:var(--accent);margin-top:6px;">
+        </div>
+      </div>
+
+      <!-- 右：频率响应 -->
+      <div style="flex:1;min-width:340px;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">频率响应（幅频 + 相频）</div>
+        <canvas id="freqRespCanvas" width="500" height="360" style="width:100%;display:block;border:1px solid var(--line);border-radius:8px;background:var(--canvasBg);"></canvas>
+        <div style="display:flex;gap:14px;margin-top:8px;font-size:12px;color:var(--dim);">
+          <span><i class="sw" style="background:var(--sinc);"></i> 幅频 |H(ω)|</span>
+          <span><i class="sw" style="background:var(--comp);"></i> 相频 ∠H(ω)</span>
+          <span><b style="color:var(--target);">│</b> 当前 ω</span>
+        </div>
+        <!-- 函数公式（Markdown 风格） -->
+        <div style="margin-top:10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:0;overflow:hidden;">
+          <div style="background:var(--line);padding:6px 12px;font-size:11px;color:var(--dim);font-family:Consolas,monospace;">FIR 频率响应 · math.md</div>
+          <div id="firFormula" style="padding:12px 16px;font-family:'Cambria','Times New Roman',serif;font-size:15px;color:var(--txt);line-height:2;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 关键洞察 -->
+    <div style="margin-top:14px;background:var(--bg);border-left:4px solid var(--accent);border-radius:0 10px 10px 0;padding:14px 18px;">
+      <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px;">关键洞察</div>
+      <div style="font-size:13px;line-height:1.8;color:var(--txt);">
+        <b>对称</b> [1,2,1]：+1 和 -1 位置的向量振幅相同、旋转方向相反 → 虚部<strong style="color:var(--comp);">完全抵消</strong> → 频响为实数 → 相位恒为 0° → 延迟后 = 线性相位。<br>
+        <b>非对称</b> [1,2,0.5]：振幅不等 → 虚部<strong style="color:var(--target);">不能抵消</strong> → 频响为复数 → 相位随 ω 非线性变化。
+      </div>
+    </div>
+
+    <!-- 知识检验 -->
+    <div class="qc-box" style="margin-top:14px;">
+      <div class="qc-t">理解检验</div>
+      <div id="firQCContent"></div>
+    </div>
+  </div>
+
+  <footer>Sinc<sup>N</sup> 频率响应交互演示 · AD7768-1 数字滤波器学习</footer>
+</div>
+
+<script>
+/* ========== 主题 ========== */
+let isDark = false;
+const themes = {
+  dark: { bg:'#0b0f14', panel:'#131a23', panel2:'#0f151d', line:'#263242',
+    txt:'#e6edf3', dim:'#8b98a9', accent:'#58a6ff',
+    sinc:'#58a6ff', comp:'#3fb950', total:'#f0c674', target:'#ff5555',
+    grid:'rgba(120,140,170,.12)', canvasBg:'#0f151d', canvasPlot:'rgba(255,255,255,.015)' },
+  light: { bg:'#f5f7fa', panel:'#ffffff', panel2:'#f8f9fb', line:'#dde1e6',
+    txt:'#1a1a2e', dim:'#6b7280', accent:'#2563eb',
+    sinc:'#2563eb', comp:'#16a34a', total:'#d97706', target:'#dc2626',
+    grid:'rgba(0,0,0,.08)', canvasBg:'#ffffff', canvasPlot:'rgba(0,0,0,.02)' }
+};
+let C = themes.light;
+function toggleTheme() {
+  isDark = !isDark;
+  C = isDark ? themes.dark : themes.light;
+  document.body.classList.toggle('light', !isDark);
+  document.getElementById('themeToggle').textContent = isDark ? '🌙 深色' : '☀️ 浅色';
+  draw();
+}
+
+/* ========== 视图模式 ========== */
+let viewMode = 'passband'; // 'passband' | 'full'
+let freqMode = 'norm'; // 'norm' | 'real'
+
+/* ========== 参数 ========== */
+let P = { N: 6, D: 8, fMOD: 8.192e6, ODR: 256e3, showComp: true };
+
+/* ========== Sinc 计算 ========== */
+function sincN(f, N, D, fMOD) {
+  const w = 2 * Math.PI * f / fMOD;
+  const den = Math.sin(w / 2);
+  if (Math.abs(den) < 1e-14) return 1.0;
+  return Math.pow(Math.abs(Math.sin(D * w / 2) / (D * den)), N);
+}
+function sincN_dB(f) { return 20 * Math.log10(Math.max(sincN(f, P.N, P.D, P.fMOD), 1e-30)); }
+function compTarget_dB(f) { return -sincN_dB(f); }
+
+/* 频率格式化 */
+function formatFreq(f) {
+  if (f >= 1e6) return (f / 1e6).toFixed(2) + ' MHz';
+  if (f >= 1e3) return (f / 1e3).toFixed(2) + ' kHz';
+  return f.toFixed(0) + ' Hz';
+}
+
+/* ========== Canvas ========== */
+const canvas = document.getElementById('wave');
+const ctx = canvas.getContext('2d');
+const ML=72, MR=20, MT=30, MB=36;
+let W, H, dpr;
+
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = canvas.clientWidth;
+  H = 480;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  draw();
+}
+
+/* 坐标映射 */
+let XMAX_R = 0.55;
+let YMIN = -1.4, YMAX = 1.2;
+function xT(r) { return ML + (r / XMAX_R) * (W - ML - MR); }
+function tX(x) { return (x - ML) / (W - ML - MR) * XMAX_R; }
+function yT(db) { return MT + (YMAX - db) / (YMAX - YMIN) * (H - MT - MB); }
+
+/* 曲线计算 */
+function computeCurvePassband() {
+  const pts = [];
+  for (let i = 0; i < 2000; i++) {
+    const r = (i / 1999) * 0.55;
+    const f = r * P.ODR;
+    pts.push({ x: r, sinc: sincN_dB(f), comp: compTarget_dB(f) });
+  }
+  return pts;
+}
+
+let gXmax = 0;
+
+function computeCurveFull() {
+  const pts = [];
+  for (let i = 0; i < 4000; i++) {
+    const x = (i / 3999) * gXmax;
+    const f = x * P.fMOD / P.D;
+    pts.push({ x, sinc: sincN_dB(f) });
+  }
+  return pts;
+}
+
+/* 零点位置 */
+function getZeros() {
+  const zeros = [];
+  const maxK = Math.floor(Math.min(P.D / 2, gXmax));
+  for (let k = 1; k <= maxK; k++) {
+    const freq = k * P.fMOD / P.D;
+    zeros.push({ k, x: k, label: '' + k, freq });
+  }
+  return zeros;
+}
+
+const KEY_FREQS = [0, 0.1, 0.2, 0.3, 0.4, 0.433, 0.5];
+
+/* ========== 绘制 ========== */
+let hoverX = null;
+
+function draw() {
+  const isFull = viewMode === 'full';
+
+  if (isFull) {
+    const maxLobes = 8;
+    gXmax = Math.min(P.D / 2, maxLobes);
+    XMAX_R = gXmax;
+    const pts = computeCurveFull();
+    let yMax = -Infinity;
+    for (const p of pts) { if (p.sinc > yMax) yMax = p.sinc; }
+    let lobeMin = Infinity;
+    const lobes = Math.floor(gXmax);
+    for (let k = 1; k < lobes; k++) {
+      const midX = k + 0.5;
+      const f = midX * P.fMOD / P.D;
+      const db = sincN_dB(f);
+      if (db < lobeMin) lobeMin = db;
+    }
+    if (!isFinite(lobeMin)) lobeMin = yMax - 60;
+    YMAX = Math.ceil((yMax + 3) / 5) * 5;
+    YMIN = Math.floor((lobeMin - 8) / 10) * 10;
+  } else {
+    gXmax = 0;
+    XMAX_R = 0.55;
+    const pts = computeCurvePassband();
+    let yMin = Infinity, yMax = -Infinity;
+    for (const p of pts) {
+      if (p.sinc < yMin) yMin = p.sinc;
+      if (p.sinc > yMax) yMax = p.sinc;
+    }
+    const margin = Math.max(0.3, (yMax - yMin) * 0.15);
+    if (P.showComp) {
+      const peak = Math.max(Math.abs(yMin), Math.abs(yMax));
+      const symMax = Math.ceil((peak + margin) * 5) / 5;
+      YMAX = symMax;
+      YMIN = -symMax;
+    } else {
+      YMIN = Math.floor((yMin - margin) * 5) / 5;
+      YMAX = Math.ceil((yMax + margin) * 5) / 5;
+    }
+  }
+
+  ctx.clearRect(0, 0, W, H);
+
+  // 背景
+  ctx.fillStyle = C.canvasBg;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = C.canvasPlot;
+  ctx.fillRect(ML, MT, W - ML - MR, H - MT - MB);
+
+  // 网格
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  const xStep = isFull ? 1 : 0.1;
+  for (let x = 0; x <= XMAX_R; x += xStep) {
+    const px = xT(x);
+    ctx.beginPath(); ctx.moveTo(px, MT); ctx.lineTo(px, H - MB); ctx.stroke();
+  }
+  const yRange = YMAX - YMIN;
+  const dbStep = yRange > 100 ? 20 : yRange > 20 ? 10 : yRange > 5 ? 2 : yRange > 2 ? 0.5 : 0.2;
+  for (let db = Math.ceil(YMIN / dbStep) * dbStep; db <= YMAX; db += dbStep) {
+    const y = yT(db);
+    if (y < MT || y > H - MB) continue;
+    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + (W - ML - MR), y); ctx.stroke();
+  }
+
+  // 0 dB 参考线
+  if (0 >= YMIN && 0 <= YMAX) {
+    ctx.strokeStyle = C.comp; ctx.lineWidth = 1;
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(ML, yT(0)); ctx.lineTo(ML + (W - ML - MR), yT(0)); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const curve = isFull ? computeCurveFull() : computeCurvePassband();
+
+  // 补偿目标（仅通带视图）
+  if (!isFull && P.showComp) {
+    ctx.strokeStyle = C.target; ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    let started = false;
+    for (const p of curve) {
+      const px = xT(p.x), py = yT(p.comp);
+      if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
+      if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Sinc 曲线
+  ctx.strokeStyle = C.sinc; ctx.lineWidth = isFull ? 2 : 2.5;
+  ctx.beginPath();
+  let started = false;
+  for (const p of curve) {
+    const px = xT(p.x), py = yT(p.sinc);
+    if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
+    if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+
+  // 零点标注（仅完整响应，只显示前3个）
+  if (isFull) {
+    const zeros = getZeros();
+    const showCount = Math.min(3, zeros.length);
+    ctx.textAlign = 'center';
+    for (let i = 0; i < showCount; i++) {
+      const z = zeros[i];
+      const px = xT(z.x);
+      // 竖虚线
+      ctx.strokeStyle = 'rgba(8,145,178,.5)'; ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.moveTo(px, MT); ctx.lineTo(px, H - MB); ctx.stroke();
+      ctx.setLineDash([]);
+      // 标签
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillStyle = '#0891b2';
+      ctx.fillText('零点 ' + z.k, px, MT - 6);
+      ctx.font = '12px Consolas, monospace';
+      ctx.fillStyle = '#155e75';
+      const label = freqMode === 'real' ? formatFreq(z.freq) : ('f/f_DATA = ' + z.k);
+      ctx.fillText(label, px, MT + 12);
+    }
+    // 旁瓣峰值标注
+    const sidelobePeaks = [];
+    const maxLobe = Math.floor(P.D / 2);
+    for (let k = 0; k < maxLobe; k++) {
+      const z0 = k, z1 = k + 1;
+      let peakX = (z0 + z1) / 2, peakDB = -999;
+      for (let i = 0; i < 200; i++) {
+        const x = z0 + (z1 - z0) * i / 199;
+        const f = x * P.fMOD / P.D;
+        const db = sincN_dB(f);
+        if (db > peakDB) { peakDB = db; peakX = x; }
+      }
+      if (k > 0) sidelobePeaks.push({ x: peakX, db: peakDB, k });
+    }
+    ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+    for (const sp of sidelobePeaks) {
+      const px = xT(sp.x), py = yT(sp.db);
+      if (py < MT || py > H - MB) continue;
+      ctx.fillStyle = C.sinc;
+      ctx.fillText(sp.db.toFixed(0) + ' dB', px, py - 8);
+      ctx.fillStyle = C.dim;
+      ctx.fillText('旁瓣' + sp.k, px, py + 14);
+    }
+  }
+
+  // 关键频点标记（仅通带视图）
+  if (!isFull) {
+    KEY_FREQS.forEach(r => {
+      const f = r * P.ODR;
+      const db = sincN_dB(f);
+      const px = xT(r), py = yT(db);
+      if (py < MT - 10 || py > H - MB + 10) return;
+      ctx.fillStyle = C.target;
+      ctx.beginPath(); ctx.arc(px, py, 5, 0, 2 * Math.PI); ctx.fill();
+      ctx.fillStyle = isDark ? '#fff' : '#000';
+      ctx.beginPath(); ctx.arc(px, py, 2, 0, 2 * Math.PI); ctx.fill();
+    });
+    // 0.433 标记线
+    ctx.strokeStyle = 'rgba(255,85,85,.35)'; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    const x433 = xT(0.433);
+    ctx.beginPath(); ctx.moveTo(x433, MT); ctx.lineTo(x433, H - MB); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,85,85,.6)';
+    ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('0.433×ODR', x433, MT - 4);
+  }
+
+  // 轴标签
+  ctx.fillStyle = C.dim; ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  for (let x = 0; x <= XMAX_R; x += xStep) {
+    let label;
+    if (isFull) {
+      if (freqMode === 'real') {
+        const freq = x * P.fMOD / P.D;
+        label = formatFreq(freq);
+      } else {
+        label = x.toFixed(0);
+      }
+    } else {
+      label = x.toFixed(1);
+    }
+    ctx.fillText(label, xT(x), H - MB + 18);
+  }
+  let xLabel;
+  if (isFull) {
+    xLabel = freqMode === 'real' ? '频率' : '归一化频率 f / f_DATA';
+  } else {
+    xLabel = '归一化频率 f / ODR';
+  }
+  ctx.fillText(xLabel, ML + (W - ML - MR) / 2, H - 2);
+
+  ctx.textAlign = 'right';
+  const yLabelStep = yRange > 100 ? 40 : yRange > 20 ? 20 : yRange > 5 ? 4 : yRange > 2 ? 1 : 0.4;
+  for (let db = Math.ceil(YMIN / yLabelStep) * yLabelStep; db <= YMAX; db += yLabelStep) {
+    const y = yT(db);
+    if (y < MT || y > H - MB) continue;
+    ctx.fillText(db.toFixed(yRange > 10 ? 0 : 1) + ' dB', ML - 8, y + 4);
+  }
+
+  // 游标
+  if (hoverX !== null && hoverX >= 0 && hoverX <= XMAX_R) {
+    const hx = xT(hoverX);
+    const hf = isFull ? hoverX * P.fMOD / P.D : hoverX * P.ODR;
+    const hSinc = sincN_dB(hf);
+    ctx.strokeStyle = isDark ? 'rgba(121,192,255,.4)' : 'rgba(37,99,235,.3)';
+    ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(hx, MT); ctx.lineTo(hx, H - MB); ctx.stroke();
+    ctx.setLineDash([]);
+    const pyS = yT(hSinc);
+    if (pyS >= MT && pyS <= H - MB) {
+      ctx.fillStyle = C.sinc;
+      ctx.shadowColor = C.sinc; ctx.shadowBlur = 10;
+      ctx.beginPath(); ctx.arc(hx, pyS, 5, 0, 2 * Math.PI); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    // 悬浮信息
+    const tipW = 220, tipH = isFull ? 48 : (P.showComp ? 68 : 48);
+    let tipX = hx + 12, tipY = MT + 10;
+    if (tipX + tipW > W - MR) tipX = hx - tipW - 12;
+    ctx.fillStyle = isDark ? 'rgba(0,0,0,.8)' : 'rgba(255,255,255,.92)';
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,.1)' : 'rgba(0,0,0,.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(tipX, tipY, tipW, tipH, 6); ctx.fill(); ctx.stroke();
+    ctx.font = '12px Consolas, monospace'; ctx.textAlign = 'left';
+    ctx.fillStyle = C.dim;
+    if (isFull) {
+      const freq = hoverX * P.fMOD / P.D;
+      const freqLabel = freqMode === 'real' ? formatFreq(freq) : ('f/f_DATA = ' + hoverX.toFixed(2));
+      ctx.fillText(freqLabel, tipX + 10, tipY + 20);
+    } else {
+      ctx.fillText('f/ODR = ' + hoverX.toFixed(4), tipX + 10, tipY + 20);
+    }
+    ctx.fillStyle = C.sinc;
+    ctx.fillText('Sinc' + supNum(P.N) + ' = ' + hSinc.toFixed(4) + ' dB', tipX + 10, tipY + 38);
+    if (!isFull && P.showComp) {
+      ctx.fillStyle = C.target;
+      ctx.fillText('补偿目标 = ' + (-hSinc).toFixed(4) + ' dB', tipX + 10, tipY + 56);
+    }
+  }
+}
+
+function supNum(n) {
+  const sup = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+  return String(n).split('').map(c => sup[parseInt(c)]).join('');
+}
+
+/* ========== 关键数值表 ========== */
+function updateKP() {
+  const grid = document.getElementById('kpGrid');
+  grid.innerHTML = '';
+  KEY_FREQS.forEach(r => {
+    const f = r * P.ODR;
+    const db = sincN_dB(f);
+    const item = document.createElement('div');
+    item.className = 'kp-item';
+    item.innerHTML = `
+      <div class="freq">f/ODR = ${r}</div>
+      <div class="val" style="color:${db < -0.5 ? C.target : C.sinc};">${db.toFixed(3)} dB</div>
+      <div class="desc">${r === 0 ? '直流完全通过' : db > -0.3 ? '轻微下降' : db > -0.8 ? '明显滚降' : '接近 1 dB'}</div>
+    `;
+    grid.appendChild(item);
+  });
+  const fM = (P.fMOD / 1e3).toFixed(1);
+  document.getElementById('formulaBox').innerHTML =
+    `<div class="eq">` +
+    `<span class="eq-l">|H<sub>Sinc${supNum(P.N)}</sub>(f)|</span>` +
+    `<span class="eq-op">=</span>` +
+    `<span class="eq-r">` +
+    `<span class="eq-abs">|</span>` +
+    `<span class="eq-frac"><span class="eq-num">sin(π·${P.D}·f / ${fM} kHz)</span>` +
+    `<span class="eq-den">${P.D} · sin(π·f / ${fM} kHz)</span></span>` +
+    `<span class="eq-abs">|</span>` +
+    `<span class="eq-pow">${supNum(P.N)}</span>` +
+    `</span></div>`;
+}
+
+/* ========== 分步讲解 ========== */
+const STEPS = [
+  { num:1, title:'理论 Sinc^N 响应', desc:'知道 Sinc^N 在每个频率上衰减了多少。',
+    detail:'Sinc^N 是 N 个长度为 D 的滑动平均（boxcar）级联。它完成大倍率抽取，但代价是通带产生确定性的滚降。直流处增益为 0 dB（完全通过），频率越高衰减越大。',
+    formula:'每级 boxcar: H(f) = sin(πDf/fMOD) / (D·sin(πf/fMOD))\nN 级级联: |H(f)|^N' },
+  { num:2, title:'求倒数 → 补偿目标', desc:'把 Sinc^N 压下去的部分补偿回来。',
+    detail:'在通带内，补偿滤波器的目标响应是 1/|Sinc^N(f)|。如果 Sinc^N 在某频率衰减了 -0.8 dB，补偿器就需要提供 +0.8 dB。注意：只在通带内做，不能对零点附近求倒数。',
+    formula:'H_comp_target(f) = 1 / |H_Sinc^N(f)|\n通带内: H_Sinc^N × H_comp ≈ 1 (0 dB)' },
+  { num:3, title:'设计偶对称 FIR', desc:'用有限长度 FIR 实现补偿目标曲线。',
+    detail:'偶对称 FIR 自动满足线性相位，群延迟固定为 (N-1)/2 个采样。RTL 中可以利用对称性减少一半乘法器。例如 46 tap 的 FIR 只需要 23 个独立系数。',
+    formula:'y[n] = Σ h[k]·x[n-k],  h[k] = h[N-1-k]\n乘法器数量: N/2 (偶数N)' },
+  { num:4, title:'加权最小二乘拟合', desc:'同时兼顾通带补偿和阻带抑制。',
+    detail:'补偿 FIR 不仅要补偿 Sinc^N 滚降，还要防止抽取后高频混叠到通带。通过调节通带/阻带权重，在两个目标之间折中。通带逼近 1/Sinc^N，阻带要求衰减 >105 dB。',
+    formula:'E = Σ_pass |A(f)-target(f)|² + ws·Σ_stop |A(f)|²\nws 通过网格扫描选最优' },
+  { num:5, title:'量化成定点系数', desc:'把浮点系数变成 FPGA 可用的整数。',
+    detail:'用 scale=2^22 量化：h_int = round(h_float × 2^22)。RTL 中乘以整数系数后右移 22 位恢复原比例。必须修正 DC 增益使整数系数和精确等于 2^22。',
+    formula:'h_int = round(h_float × 2^22)\nRTL: result = (Σ sample × coeff) >>> 22\nDC增益: Σ h_int == 2^22' },
+  { num:6, title:'重新验证量化后的响应', desc:'浮点满足指标 ≠ 定点也满足。',
+    detail:'用整数系数重新计算频响，检查通带纹波、阻带衰减、系数位宽、累加器溢出、DC 偏移。本工程 46 tap 方案：纹波 0.0049 mdB，阻带 119.6 dB，DC 增益精确为 1。',
+    formula:'检查项:\n• 通带纹波 < ±5 mdB\n• 阻带衰减 > 105 dB\n• 系数 < 23 bit\n• 累加器位宽足够' }
+];
+
+function renderSteps() {
+  const grid = document.getElementById('stepsGrid');
+  grid.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'step' + (i === 0 ? ' active' : '');
+    div.innerHTML = `<span class="st-num">${s.num}</span><span class="st-title">${s.title}</span><div class="st-desc">${s.desc}</div>`;
+    div.onclick = () => showStep(i);
+    grid.appendChild(div);
+  });
+  showStep(0);
+}
+
+function showStep(idx) {
+  document.querySelectorAll('.step').forEach((el, i) => el.classList.toggle('active', i === idx));
+  const s = STEPS[idx];
+  document.getElementById('stepDetail').innerHTML = `
+    <div style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:16px;">
+      <div style="font-size:14px;line-height:1.7;color:var(--txt);">${s.detail}</div>
+      <div class="st-formula" style="margin-top:10px;">${s.formula.replace(/\n/g, '<br>')}</div>
+    </div>`;
+}
+
+/* ========== 知识检验 ========== */
+const QC = [
+  { q:'Sinc⁶ 在 f/ODR=0.4 处的增益是 -0.847 dB，这意味着信号：',
+    opts:['变大了约 0.8 dB','变小了约 0.8 dB','幅度不变'], ans:1,
+    explain:'dB 为负值表示幅度变小。-0.847 dB 约等于幅度变为原来的 91%，即信号被衰减了。' },
+  { q:'如果 Sinc⁶ 在某个频率处的增益是 -0.5 dB，补偿滤波器需要提供多少 dB？',
+    opts:['-0.5 dB','0 dB','+0.5 dB'], ans:2,
+    explain:'补偿器的目标是让级联后总响应为 0 dB（平坦）。因此需要 +0.5 dB 来抵消 Sinc⁶ 的 -0.5 dB 衰减。' },
+  { q:'为什么 Sinc⁶ 在直流处增益为 0 dB？',
+    opts:['因为滑动平均不改变直流信号的幅度','因为 Sinc⁶ 有 6 级','因为 D=8'], ans:0,
+    explain:'直流信号所有样本值相同，滑动平均后值不变，所以增益为 1（即 0 dB）。这是 boxcar 滤波器的基本特性。' }
+];
+
+let qcState = {};
+function renderQC() {
+  const box = document.getElementById('qcContent');
+  box.innerHTML = '';
+  QC.forEach((q, qi) => {
+    const div = document.createElement('div');
+    div.style.marginBottom = '16px';
+    div.innerHTML = `
+      <div class="qc-q">${qi + 1}. ${q.q}</div>
+      <div class="qc-opts" id="qc-opts-${qi}">
+        ${q.opts.map((o, oi) => `<div class="qc-opt" data-qi="${qi}" data-oi="${oi}">${o}</div>`).join('')}
+      </div>
+      <div class="qc-explain" id="qc-exp-${qi}">${q.explain}</div>`;
+    box.appendChild(div);
+  });
+  document.querySelectorAll('.qc-opt').forEach(el => {
+    el.onclick = () => {
+      const qi = parseInt(el.dataset.qi), oi = parseInt(el.dataset.oi);
+      if (qcState[qi] !== undefined) return;
+      qcState[qi] = oi;
+      el.classList.add(QC[qi].ans === oi ? 'correct' : 'wrong');
+      if (QC[qi].ans !== oi)
+        document.querySelector(`#qc-opts-${qi} .qc-opt[data-oi="${QC[qi].ans}"]`).classList.add('correct');
+      document.getElementById(`qc-exp-${qi}`).classList.add('show');
+    };
+  });
+}
+
+/* ========== 导出 PNG ========== */
+document.getElementById('exportBtn').onclick = () => {
+  const out = document.createElement('canvas');
+  out.width = W; out.height = H;
+  out.getContext('2d').drawImage(canvas, 0, 0, W, H);
+  const a = document.createElement('a');
+  a.download = 'sinc6_response.png';
+  a.href = out.toDataURL('image/png');
+  a.click();
+};
+
+/* ========== 交互 ========== */
+let dragging = false;
+function seek(e) {
+  const r = canvas.getBoundingClientRect();
+  hoverX = Math.max(0, Math.min(XMAX_R, tX(e.clientX - r.left)));
+  draw();
+}
+canvas.addEventListener('mousedown', e => { dragging = true; seek(e); });
+window.addEventListener('mousemove', e => { if (dragging || e.target === canvas) seek(e); });
+window.addEventListener('mouseup', () => { dragging = false; });
+
+/* ========== 视图切换 ========== */
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById('viewPassband').classList.toggle('active', mode === 'passband');
+  document.getElementById('viewFull').classList.toggle('active', mode === 'full');
+  document.getElementById('kpPanel').style.display = mode === 'passband' ? '' : 'none';
+  document.getElementById('showComp').closest('.ctl-group').style.display = mode === 'passband' ? '' : 'none';
+  document.getElementById('freqModeGroup').style.display = mode === 'full' ? '' : 'none';
+  // 更新图例
+  const legend = document.getElementById('legendBar');
+  if (mode === 'full') {
+    legend.innerHTML = `
+      <span><i class="sw" style="background:var(--sinc);"></i><b style="color:var(--sinc);">Sinc<sup>N</sup></b> 频率响应</span>
+      <span><i class="sw" style="background:#0891b2;border-top:2px dashed #0891b2;height:0;"></i><b style="color:#0891b2;">零点位置</b></span>
+      <span><b style="color:var(--accent);">│</b> 游标（可拖动）</span>`;
+  } else {
+    legend.innerHTML = `
+      <span><i class="sw" style="background:var(--sinc);"></i><b style="color:var(--sinc);">Sinc<sup>N</sup></b> 实际响应</span>
+      <span><i class="sw" style="background:var(--target);"></i><b style="color:var(--target);">1/Sinc<sup>N</sup></b> 补偿目标</span>
+      <span><i class="sw" style="background:var(--comp);"></i><b style="color:var(--comp);">0 dB</b> 参考线</span>
+      <span><b style="color:var(--target);">▲</b> 采样标记</span>
+      <span><b style="color:var(--accent);">│</b> 游标（可拖动）</span>`;
+  }
+  draw();
+}
+
+/* ========== 频率模式切换 ========== */
+function setFreqMode(mode) {
+  freqMode = mode;
+  document.getElementById('freqNorm').classList.toggle('active', mode === 'norm');
+  document.getElementById('freqReal').classList.toggle('active', mode === 'real');
+  draw();
+}
+
+/* ========== 参数绑定 ========== */
+function syncODR() {
+  P.ODR = P.fMOD / P.D;
+  document.getElementById('odrInput').value = Math.round(P.ODR);
+}
+
+document.getElementById('stageInput').onchange = e => {
+  P.N = Math.max(1, Math.min(10, parseInt(e.target.value) || 6));
+  updateKP(); draw();
+};
+document.getElementById('decInput').onchange = e => {
+  P.D = Math.max(2, Math.min(1000, parseInt(e.target.value) || 8));
+  syncODR();
+  updateKP(); draw();
+};
+document.getElementById('fmodInput').onchange = e => {
+  P.fMOD = Math.max(1e3, Math.min(100e6, (parseFloat(e.target.value) || 8192) * 1e3));
+  syncODR();
+  updateKP(); draw();
+};
+document.getElementById('odrInput').onchange = e => {
+  P.ODR = Math.max(1, Math.min(10e6, parseInt(e.target.value) || 256000));
+  P.D = Math.round(P.fMOD / P.ODR);
+  document.getElementById('decInput').value = P.D;
+  updateKP(); draw();
+};
+document.getElementById('showComp').onchange = e => { P.showComp = e.target.checked; draw(); };
+document.getElementById('themeToggle').onclick = toggleTheme;
+document.getElementById('viewPassband').onclick = () => setView('passband');
+document.getElementById('viewFull').onclick = () => setView('full');
+document.getElementById('freqNorm').onclick = () => setFreqMode('norm');
+document.getElementById('freqReal').onclick = () => setFreqMode('real');
+
+/* ========== Tab 切换 ========== */
+let currentTab = 'sinc';
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('navSinc').classList.toggle('active', tab === 'sinc');
+  document.getElementById('navFir').classList.toggle('active', tab === 'fir');
+  document.getElementById('sincSection').style.display = tab === 'sinc' ? '' : 'none';
+  document.getElementById('firSection').style.display = tab === 'fir' ? '' : 'none';
+  if (tab === 'fir') { drawPhasor(); drawFreqResp(); }
+}
+document.getElementById('navSinc').onclick = () => switchTab('sinc');
+document.getElementById('navFir').onclick = () => switchTab('fir');
+
+/* ========== FIR 偶对称 旋转向量 ========== */
+let phasorCoeffs = [1, 2, 1];
+let omegaNorm = 0;
+let animRunning = false;
+let animId = null;
+let trailPoints = []; // 动画轨迹
+
+const PHASOR_COLORS = ['#58a6ff', '#3fb950', '#f0c674', '#ff7b72', '#d2a8ff', '#79c0ff', '#ffa657', '#7ee787'];
+
+function applyCoeffInput() {
+  const raw = document.getElementById('coeffInput').value;
+  const nums = raw.split(/[,\s]+/).map(Number).filter(n => !isNaN(n) && isFinite(n));
+  if (nums.length < 2) return;
+  phasorCoeffs = nums;
+  trailPoints = [];
+  drawPhasor();
+  drawFreqResp();
+  updateFirFormula();
+}
+
+function setPreset(arr) {
+  phasorCoeffs = arr;
+  document.getElementById('coeffInput').value = arr.join(', ');
+  trailPoints = [];
+  drawPhasor();
+  drawFreqResp();
+  updateFirFormula();
+}
+
+function toggleAnimation() {
+  animRunning = !animRunning;
+  document.getElementById('btnPlay').textContent = animRunning ? '⏸ 暂停' : '▶ 播放动画';
+  if (animRunning) { omegaNorm = 0; trailPoints = []; animLoop(); }
+  else if (animId) { cancelAnimationFrame(animId); animId = null; }
+}
+
+function resetAnimation() {
+  animRunning = false;
+  if (animId) { cancelAnimationFrame(animId); animId = null; }
+  document.getElementById('btnPlay').textContent = '▶ 播放动画';
+  omegaNorm = 0;
+  trailPoints = [];
+  document.getElementById('omegaSlider').value = 0;
+  document.getElementById('omegaVal').textContent = '0.00';
+  drawPhasor();
+  drawFreqResp();
+}
+
+function animLoop() {
+  if (!animRunning) return;
+  omegaNorm += 0.006;
+  if (omegaNorm > 2) { omegaNorm = 2; animRunning = false; document.getElementById('btnPlay').textContent = '▶ 播放动画'; }
+  document.getElementById('omegaSlider').value = omegaNorm * 100;
+  document.getElementById('omegaVal').textContent = omegaNorm.toFixed(2);
+  // 记录轨迹
+  const N = phasorCoeffs.length, mid = (N - 1) / 2;
+  const omega = omegaNorm * Math.PI;
+  let re = 0, im = 0;
+  for (let k = 0; k < N; k++) { const n = k - mid; re += phasorCoeffs[k] * Math.cos(-omega * n); im += phasorCoeffs[k] * Math.sin(-omega * n); }
+  trailPoints.push({ re, im, w: omegaNorm });
+  if (trailPoints.length > 600) trailPoints.shift();
+  drawPhasor();
+  drawFreqResp();
+  if (animRunning) animId = requestAnimationFrame(animLoop);
+}
+
+function updateFirFormula() {
+  const h = phasorCoeffs;
+  const N = h.length;
+  let terms = [];
+  for (let k = 0; k < N; k++) {
+    const v = h[k];
+    if (v === 0) continue;
+    let sign = '';
+    if (k > 0) sign = v > 0 ? ' + ' : ' − ';
+    else if (v < 0) sign = '−';
+    let absV = Math.abs(v);
+    let vStr = absV === 1 && k > 0 ? '' : (absV % 1 === 0 ? absV : absV.toFixed(2));
+    if (k === 0) vStr = (v % 1 === 0 ? v : v.toFixed(2));
+    let expStr = k === 0 ? '' : (k === 1 ? '<i>e</i><sup>−jω</sup>' : `<i>e</i><sup>−j${k}ω</sup>`);
+    terms.push(`${sign}<b style="color:var(--sinc);">${vStr}</b>${expStr}`);
+  }
+  let isSym = true, isAntiSym = true;
+  for (let k = 0; k < Math.floor(N / 2); k++) {
+    if (h[k] !== h[N - 1 - k]) isSym = false;
+    if (h[k] !== -h[N - 1 - k]) isAntiSym = false;
+  }
+  let symTag = isSym ? '<span style="color:var(--comp);">✓ 偶对称</span>' :
+               isAntiSym ? '<span style="color:var(--comp);">✓ 奇对称</span>' :
+               '<span style="color:var(--target);">✗ 非对称</span>';
+
+  document.getElementById('firFormula').innerHTML =
+    `<div style="font-size:17px;">H(ω) = ${terms.join('')}</div>` +
+    `<div style="margin-top:6px;font-size:13px;color:var(--dim);font-family:Consolas,monospace;">` +
+    `h = [${h.join(', ')}]　N = ${N}　${symTag}</div>`;
+}
+
+function drawPhasor() {
+  const c = document.getElementById('phasorCanvas');
+  const ctx2 = c.getContext('2d');
+  const dpr2 = window.devicePixelRatio || 1;
+  const w2 = c.clientWidth, h2 = 360;
+  c.width = w2 * dpr2; c.height = h2 * dpr2;
+  c.style.height = h2 + 'px';
+  ctx2.setTransform(dpr2, 0, 0, dpr2, 0, 0);
+
+  const bg = isDark ? '#0f151d' : '#ffffff';
+  const lineColor = isDark ? '#263242' : '#dde1e6';
+  const txtColor = isDark ? '#8b98a9' : '#6b7280';
+  const accentColor = isDark ? '#58a6ff' : '#2563eb';
+
+  ctx2.clearRect(0, 0, w2, h2);
+  ctx2.fillStyle = bg;
+  ctx2.fillRect(0, 0, w2, h2);
+
+  // 复平面参数
+  const cx = w2 * 0.45, cy = h2 * 0.5;
+  const scale = Math.min(w2, h2) * 0.22;
+  const omega = omegaNorm * Math.PI; // 实际 omega
+
+  // 画坐标轴
+  ctx2.strokeStyle = lineColor; ctx2.lineWidth = 1;
+  ctx2.beginPath(); ctx2.moveTo(cx - scale * 2.2, cy); ctx2.lineTo(cx + scale * 2.2, cy); ctx2.stroke();
+  ctx2.beginPath(); ctx2.moveTo(cx, cy - scale * 2.2); ctx2.lineTo(cx, cy + scale * 2.2); ctx2.stroke();
+
+  // 轴标签
+  ctx2.fillStyle = txtColor; ctx2.font = '11px sans-serif'; ctx2.textAlign = 'center';
+  ctx2.fillText('Re', cx + scale * 2.2 - 8, cy - 8);
+  ctx2.fillText('Im', cx + 8, cy - scale * 2.2 + 12);
+
+  // 计算各向量
+  const N = phasorCoeffs.length;
+  const mid = (N - 1) / 2;
+  let sumRe = 0, sumIm = 0;
+  const vectors = [];
+
+  for (let k = 0; k < N; k++) {
+    const n = k - mid; // 中心化位置
+    const h = phasorCoeffs[k];
+    const re = h * Math.cos(-omega * n);
+    const im = h * Math.sin(-omega * n);
+    sumRe += re;
+    sumIm += im;
+    vectors.push({ re, im, h, n, color: PHASOR_COLORS[k % PHASOR_COLORS.length] });
+  }
+
+  // 画单位圆参考（可选，帮助定位）
+  ctx2.strokeStyle = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+  ctx2.lineWidth = 1;
+  ctx2.beginPath(); ctx2.arc(cx, cy, scale, 0, 2 * Math.PI); ctx2.stroke();
+
+  // 画轨迹（动画留下的痕迹）
+  if (trailPoints.length > 1) {
+    for (let i = 1; i < trailPoints.length; i++) {
+      const t = i / trailPoints.length;
+      const alpha = 0.08 + t * 0.35;
+      ctx2.strokeStyle = `rgba(88,166,255,${alpha})`;
+      ctx2.lineWidth = 1.5;
+      const x1 = cx + trailPoints[i - 1].re * scale, y1 = cy - trailPoints[i - 1].im * scale;
+      const x2 = cx + trailPoints[i].re * scale, y2 = cy - trailPoints[i].im * scale;
+      ctx2.beginPath(); ctx2.moveTo(x1, y1); ctx2.lineTo(x2, y2); ctx2.stroke();
+    }
+    // 轨迹终点发光点
+    const last = trailPoints[trailPoints.length - 1];
+    const lx = cx + last.re * scale, ly = cy - last.im * scale;
+    ctx2.fillStyle = 'rgba(88,166,255,.5)';
+    ctx2.beginPath(); ctx2.arc(lx, ly, 6, 0, 2 * Math.PI); ctx2.fill();
+  }
+
+  // 画各向量（从原点出发，首尾相接显示合成过程）
+  let tailRe = 0, tailIm = 0;
+  for (const v of vectors) {
+    const x1 = cx + tailRe * scale, y1 = cy - tailIm * scale;
+    const x2 = cx + (tailRe + v.re) * scale, y2 = cy - (tailIm + v.im) * scale;
+
+    // 向量线段
+    ctx2.strokeStyle = v.color; ctx2.lineWidth = 2.5;
+    ctx2.beginPath(); ctx2.moveTo(x1, y1); ctx2.lineTo(x2, y2); ctx2.stroke();
+
+    // 箭头
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const headLen = 8;
+    ctx2.beginPath();
+    ctx2.moveTo(x2, y2);
+    ctx2.lineTo(x2 - headLen * Math.cos(angle - 0.35), y2 - headLen * Math.sin(angle - 0.35));
+    ctx2.moveTo(x2, y2);
+    ctx2.lineTo(x2 - headLen * Math.cos(angle + 0.35), y2 - headLen * Math.sin(angle + 0.35));
+    ctx2.stroke();
+
+    // 起点小圆点
+    ctx2.fillStyle = v.color;
+    ctx2.beginPath(); ctx2.arc(x1, y1, 3, 0, 2 * Math.PI); ctx2.fill();
+
+    tailRe += v.re;
+    tailIm += v.im;
+  }
+
+  // 合成向量（红色粗线）
+  const sx = cx + sumRe * scale, sy = cy - sumIm * scale;
+  ctx2.strokeStyle = isDark ? '#ff7b72' : '#dc2626'; ctx2.lineWidth = 3;
+  ctx2.beginPath(); ctx2.moveTo(cx, cy); ctx2.lineTo(sx, sy); ctx2.stroke();
+  // 箭头
+  const sAngle = Math.atan2(sy - cy, sx - cx);
+  ctx2.beginPath();
+  ctx2.moveTo(sx, sy);
+  ctx2.lineTo(sx - 10 * Math.cos(sAngle - 0.35), sy - 10 * Math.sin(sAngle - 0.35));
+  ctx2.moveTo(sx, sy);
+  ctx2.lineTo(sx - 10 * Math.cos(sAngle + 0.35), sy - 10 * Math.sin(sAngle + 0.35));
+  ctx2.stroke();
+  // 终点标记
+  ctx2.fillStyle = isDark ? '#ff7b72' : '#dc2626';
+  ctx2.beginPath(); ctx2.arc(sx, sy, 5, 0, 2 * Math.PI); ctx2.fill();
+
+  // 合成点标注
+  const phase = Math.atan2(sumIm, sumRe);
+  const mag = Math.sqrt(sumRe * sumRe + sumIm * sumIm);
+  ctx2.fillStyle = isDark ? '#ff7b72' : '#dc2626';
+  ctx2.font = 'bold 12px Consolas, monospace'; ctx2.textAlign = 'left';
+  ctx2.fillText(`合成: ${mag.toFixed(3)}∠${(phase * 180 / Math.PI).toFixed(1)}°`, sx + 10, sy - 10);
+
+  // 右侧信息面板
+  const infoX = w2 * 0.72, infoY = 30;
+  ctx2.fillStyle = txtColor; ctx2.font = '12px sans-serif'; ctx2.textAlign = 'left';
+  ctx2.fillText('各向量:', infoX, infoY);
+  for (let i = 0; i < vectors.length; i++) {
+    const v = vectors[i];
+    ctx2.fillStyle = v.color;
+    ctx2.fillText(`n=${v.n > 0 ? '+' : ''}${v.n}, h=${v.h}`, infoX, infoY + 20 + i * 20);
+    const vm = Math.sqrt(v.re * v.re + v.im * v.im);
+    const vp = Math.atan2(v.im, v.re) * 180 / Math.PI;
+    ctx2.fillStyle = txtColor;
+    ctx2.fillText(`→ ${vm.toFixed(2)}∠${vp.toFixed(1)}°`, infoX + 80, infoY + 20 + i * 20);
+  }
+
+  // 合成结果
+  ctx2.fillStyle = isDark ? '#ff7b72' : '#dc2626';
+  ctx2.font = 'bold 13px sans-serif';
+  ctx2.fillText(`虚部: ${sumIm.toFixed(4)}`, infoX, infoY + 20 + vectors.length * 20 + 10);
+  ctx2.fillText(`相位: ${(phase * 180 / Math.PI).toFixed(2)}°`, infoX, infoY + 20 + vectors.length * 20 + 30);
+}
+
+/* ========== 频率响应图 ========== */
+function drawFreqResp() {
+  const c = document.getElementById('freqRespCanvas');
+  const ctx2 = c.getContext('2d');
+  const dpr2 = window.devicePixelRatio || 1;
+  const w2 = c.clientWidth, h2 = 360;
+  c.width = w2 * dpr2; c.height = h2 * dpr2;
+  c.style.height = h2 + 'px';
+  ctx2.setTransform(dpr2, 0, 0, dpr2, 0, 0);
+
+  const bg = isDark ? '#0f151d' : '#ffffff';
+  const lineColor = isDark ? '#263242' : '#dde1e6';
+  const txtColor = isDark ? '#8b98a9' : '#6b7280';
+  const sincColor = isDark ? '#58a6ff' : '#2563eb';
+  const compColor = isDark ? '#3fb950' : '#16a34a';
+  const targetColor = isDark ? '#ff5555' : '#dc2626';
+
+  ctx2.clearRect(0, 0, w2, h2);
+  ctx2.fillStyle = bg;
+  ctx2.fillRect(0, 0, w2, h2);
+
+  const ml = 50, mr = 20, mt = 20, mb = 36;
+  const pw = w2 - ml - mr, ph = h2 - mt - mb;
+
+  // 计算频响数据（扩展到 1.15π 让 π 点不贴边）
+  const N = phasorCoeffs.length;
+  const mid = (N - 1) / 2;
+  const pts = [];
+  const steps = 400;
+  const WMAX = 1.15; // 倍数 of π
+  for (let i = 0; i <= steps; i++) {
+    const w = (i / steps) * Math.PI * WMAX;
+    let re = 0, im = 0;
+    for (let k = 0; k < N; k++) {
+      const n = k - mid;
+      re += phasorCoeffs[k] * Math.cos(-w * n);
+      im += phasorCoeffs[k] * Math.sin(-w * n);
+    }
+    const mag = Math.sqrt(re * re + im * im);
+    pts.push({ w, mag, re, im });
+  }
+  // 相位解包裹：消除 ±π 跳变
+  for (let i = 0; i <= steps; i++) {
+    pts[i].phase = Math.atan2(pts[i].im, pts[i].re);
+  }
+  for (let i = 1; i <= steps; i++) {
+    let diff = pts[i].phase - pts[i - 1].phase;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    pts[i].phase = pts[i - 1].phase + diff;
+  }
+
+  // 幅频范围 0~maxMag
+  let maxMag = 0;
+  for (const p of pts) { if (p.mag > maxMag) maxMag = p.mag; }
+  maxMag = Math.ceil(maxMag * 10) / 10 + 0.1;
+
+  // 相频范围（解包裹后可能超出 ±π）
+  let phaseMin = 0, phaseMax2 = 0;
+  for (const p of pts) {
+    if (p.phase < phaseMin) phaseMin = p.phase;
+    if (p.phase > phaseMax2) phaseMax2 = p.phase;
+  }
+  const phaseAbsMax = Math.max(Math.abs(phaseMin), Math.abs(phaseMax2), Math.PI);
+  const phaseRange = phaseAbsMax * 1.1;
+
+  function xPx(w) { return ml + (w / (Math.PI * WMAX)) * pw; }
+  function yMagPx(m) { return mt + (1 - m / maxMag) * ph; }
+  function yPhasePx(p) { return mt + (0.5 - p / (2 * phaseRange)) * ph; }
+
+  // 网格
+  ctx2.strokeStyle = lineColor; ctx2.lineWidth = 1;
+  for (let i = 0; i <= 12; i++) {
+    const v = i / 10;
+    if (v > WMAX) break;
+    const x = ml + (v / WMAX) * pw;
+    ctx2.beginPath(); ctx2.moveTo(x, mt); ctx2.lineTo(x, mt + ph); ctx2.stroke();
+  }
+  for (let i = 0; i <= 4; i++) {
+    const y = mt + (i / 4) * ph;
+    ctx2.beginPath(); ctx2.moveTo(ml, y); ctx2.lineTo(ml + pw, y); ctx2.stroke();
+  }
+
+  // 0 相位参考线
+  const yZero = yPhasePx(0);
+  ctx2.strokeStyle = compColor; ctx2.lineWidth = 1; ctx2.setLineDash([4, 4]);
+  ctx2.beginPath(); ctx2.moveTo(ml, yZero); ctx2.lineTo(ml + pw, yZero); ctx2.stroke();
+  ctx2.setLineDash([]);
+
+  // 幅频曲线
+  ctx2.strokeStyle = sincColor; ctx2.lineWidth = 2;
+  ctx2.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const x = xPx(pts[i].w), y = yMagPx(pts[i].mag);
+    if (i === 0) ctx2.moveTo(x, y); else ctx2.lineTo(x, y);
+  }
+  ctx2.stroke();
+
+  // 相频曲线
+  ctx2.strokeStyle = compColor; ctx2.lineWidth = 2;
+  ctx2.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const x = xPx(pts[i].w), y = yPhasePx(pts[i].phase);
+    if (i === 0) ctx2.moveTo(x, y); else ctx2.lineTo(x, y);
+  }
+  ctx2.stroke();
+
+  // 画频响上的扫频轨迹（动画留下的痕迹）
+  if (trailPoints.length > 1) {
+    // 幅频轨迹
+    ctx2.strokeStyle = 'rgba(88,166,255,.4)'; ctx2.lineWidth = 1.5;
+    ctx2.beginPath();
+    for (let i = 0; i < trailPoints.length; i++) {
+      const x = xPx(trailPoints[i].w * Math.PI);
+      const mag = Math.sqrt(trailPoints[i].re * trailPoints[i].re + trailPoints[i].im * trailPoints[i].im);
+      const y = yMagPx(mag);
+      if (i === 0) ctx2.moveTo(x, y); else ctx2.lineTo(x, y);
+    }
+    ctx2.stroke();
+    // 相频轨迹（解包裹）
+    ctx2.strokeStyle = 'rgba(63,185,80,.4)'; ctx2.lineWidth = 1.5;
+    ctx2.beginPath();
+    let prevTrailPhase = 0;
+    for (let i = 0; i < trailPoints.length; i++) {
+      const x = xPx(trailPoints[i].w * Math.PI);
+      let tp = Math.atan2(trailPoints[i].im, trailPoints[i].re);
+      if (i > 0) {
+        let d = tp - prevTrailPhase;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        tp = prevTrailPhase + d;
+      }
+      const y = yPhasePx(tp);
+      prevTrailPhase = tp;
+      if (i === 0) ctx2.moveTo(x, y); else ctx2.lineTo(x, y);
+    }
+    ctx2.stroke();
+  }
+
+  // 当前 ω 标记线
+  const curOmega = omegaNorm * Math.PI;
+  const curX = xPx(curOmega);
+  ctx2.strokeStyle = targetColor; ctx2.lineWidth = 1.5; ctx2.setLineDash([4, 4]);
+  ctx2.beginPath(); ctx2.moveTo(curX, mt); ctx2.lineTo(curX, mt + ph); ctx2.stroke();
+  ctx2.setLineDash([]);
+
+  // 找当前 ω 处的值
+  const curIdx = Math.round(omegaNorm * steps);
+  const curPt = pts[Math.min(curIdx, steps)];
+  // 幅频点
+  ctx2.fillStyle = sincColor;
+  ctx2.beginPath(); ctx2.arc(curX, yMagPx(curPt.mag), 5, 0, 2 * Math.PI); ctx2.fill();
+  // 相频点
+  ctx2.fillStyle = compColor;
+  ctx2.beginPath(); ctx2.arc(curX, yPhasePx(curPt.phase), 5, 0, 2 * Math.PI); ctx2.fill();
+
+  // 数值标注
+  ctx2.font = '11px Consolas, monospace'; ctx2.textAlign = 'left';
+  ctx2.fillStyle = sincColor;
+  ctx2.fillText(`|H| = ${curPt.mag.toFixed(3)}`, curX + 8, yMagPx(curPt.mag) - 6);
+  ctx2.fillStyle = compColor;
+  ctx2.fillText(`∠H = ${(curPt.phase * 180 / Math.PI).toFixed(1)}°`, curX + 8, yPhasePx(curPt.phase) + 16);
+
+  // 轴标签
+  ctx2.fillStyle = txtColor; ctx2.font = '11px sans-serif'; ctx2.textAlign = 'center';
+  ctx2.fillText('ω / π', ml + pw / 2, h2 - 4);
+  for (let i = 0; i <= 12; i++) {
+    const v = i / 10;
+    if (v > WMAX) break;
+    ctx2.fillText(v.toFixed(1), ml + (v / WMAX) * pw, mt + ph + 18);
+  }
+  ctx2.textAlign = 'right';
+  ctx2.fillText('0', ml - 6, yZero + 4);
+  ctx2.fillText('+' + phaseRange.toFixed(1), ml - 6, mt + 8);
+  ctx2.fillText('-' + phaseRange.toFixed(1), ml - 6, mt + ph - 2);
+}
+
+/* ========== FIR 知识检验 ========== */
+const FIR_QC = [
+  { q:'以下哪个滤波器系数是偶对称的？',
+    opts:['[1, 2, 3]','[3, 2, 1]','[1, 2, 1]'], ans:2,
+    explain:'偶对称要求 h[k] = h[N-1-k]，即关于中点镜像相等。[1,2,1] 中 h[0]=h[2]=1，满足对称。[1,2,3] 和 [3,2,1] 都不对称。' },
+  { q:'偶对称 FIR 的频响在任意频率 ω 处，虚部 I(ω) 等于：',
+    opts:['总是 0','总是正数','随 ω 非线性变化'], ans:0,
+    explain:'对称系数使每对 e^{+jωn} 和 e^{-jωn} 的虚部互相抵消，总和永远在实轴上，虚部为 0。' },
+  { q:'为什么 [1,2,0.5] 不能保证线性相位？',
+    opts:['因为系数个数是奇数','因为 h[0]≠h[2]，不对称，虚部不能完全抵消','因为增益太大'], ans:1,
+    explain:'不对称导致两个反方向旋转的向量振幅不同，虚部残留，频响为复数，相位随 ω 非线性变化。' }
+];
+
+function renderFirQC() {
+  const box = document.getElementById('firQCContent');
+  box.innerHTML = '';
+  FIR_QC.forEach((q, qi) => {
+    const div = document.createElement('div');
+    div.style.marginBottom = '16px';
+    div.innerHTML = `
+      <div class="qc-q">${qi + 1}. ${q.q}</div>
+      <div class="qc-opts" id="firqc-opts-${qi}">
+        ${q.opts.map((o, oi) => `<div class="qc-opt" data-qi="${qi}" data-oi="${oi}">${o}</div>`).join('')}
+      </div>
+      <div class="qc-explain" id="firqc-exp-${qi}">${q.explain}</div>`;
+    box.appendChild(div);
+  });
+  document.querySelectorAll('#firQCContent .qc-opt').forEach(el => {
+    el.onclick = () => {
+      const qi = parseInt(el.dataset.qi), oi = parseInt(el.dataset.oi);
+      if (el.classList.contains('correct') || el.classList.contains('wrong')) return;
+      el.classList.add(FIR_QC[qi].ans === oi ? 'correct' : 'wrong');
+      if (FIR_QC[qi].ans !== oi)
+        document.querySelector(`#firqc-opts-${qi} .qc-opt[data-oi="${FIR_QC[qi].ans}"]`).classList.add('correct');
+      document.getElementById(`firqc-exp-${qi}`).classList.add('show');
+    };
+  });
+}
+
+/* ========== ω 滑块绑定 ========== */
+document.getElementById('omegaSlider').oninput = function() {
+  omegaNorm = this.value / 100;
+  document.getElementById('omegaVal').textContent = omegaNorm.toFixed(2);
+  drawPhasor();
+  drawFreqResp();
+};
+
+/* ========== 系数输入回车 ========== */
+document.getElementById('coeffInput').onkeydown = function(e) {
+  if (e.key === 'Enter') applyCoeffInput();
+};
+
+/* ========== 启动 ========== */
+syncODR();
+renderSteps();
+renderQC();
+renderFirQC();
+updateKP();
+updateFirFormula();
+resize();
+drawPhasor();
+drawFreqResp();
+window.addEventListener('resize', () => { resize(); drawPhasor(); drawFreqResp(); });
+</script>
+</body>
+</html>
