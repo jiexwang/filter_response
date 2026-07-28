@@ -342,8 +342,14 @@ function totalDecimation() {
   return sincStages.reduce((prod, s) => prod * s.D, 1);
 }
 
+function stageFmod(i) {
+  let fm = P.fMOD;
+  for (let j = 0; j < i; j++) fm /= sincStages[j].D;
+  return fm;
+}
+
 function cascadedSinc_linear(f) {
-  return sincStages.reduce((prod, s) => prod * sincN(f, s.N, s.D, P.fMOD), 1);
+  return sincStages.reduce((prod, s, i) => prod * sincN(f, s.N, s.D, stageFmod(i)), 1);
 }
 
 function cascadedSinc_dB(f) {
@@ -456,7 +462,7 @@ function computeCurvePassband() {
     const r = (i / 1999) * maxX;
     const f = r * P.ODR;
     if (cascadeMode) {
-      const stages = sincStages.map(s => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, P.fMOD), 1e-30)));
+      const stages = sincStages.map((s, i) => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, stageFmod(i)), 1e-30)));
       const total = stages.reduce((a, b) => a + b, 0);
       pts.push({ x: r, stages, sinc: Math.max(total, Y_FLOOR), comp: Math.min(-total, -Y_FLOOR) });
     } else {
@@ -472,7 +478,7 @@ function computeCurveFullRange() {
     const frac = (i / 3999) * 0.5;
     const f = frac * P.fMOD;
     if (cascadeMode) {
-      const stages = sincStages.map(s => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, P.fMOD), 1e-30)));
+      const stages = sincStages.map((s, i) => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, stageFmod(i)), 1e-30)));
       const total = stages.reduce((a, b) => a + b, 0);
       pts.push({ x: frac, stages, sinc: Math.max(total, Y_FLOOR) });
     } else {
@@ -502,7 +508,7 @@ function drawPassband() {
     const r = (i / (N_PTS - 1)) * maxX;
     const f = r * P.ODR;
     if (cascadeMode) {
-      const stages = sincStages.map(s => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, P.fMOD), 1e-30)));
+      const stages = sincStages.map((s, i) => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, stageFmod(i)), 1e-30)));
       const total = stages.reduce((a, b) => a + b, 0);
       curve.push({ x: r, stages, sinc: Math.max(total, Y_FLOOR), comp: Math.min(-total, -Y_FLOOR) });
     } else {
@@ -714,7 +720,7 @@ function drawFullRange() {
     const frac = (i / (N_PTS - 1)) * xMaxDef;
     const f = frac * P.fMOD;
     if (cascadeMode) {
-      const stages = sincStages.map(s => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, P.fMOD), 1e-30)));
+      const stages = sincStages.map((s, i) => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, stageFmod(i)), 1e-30)));
       const total = stages.reduce((a, b) => a + b, 0);
       pts.push({ x: frac, stages, sinc: Math.max(total, Y_FLOOR) });
     } else {
