@@ -487,9 +487,14 @@ const KEY_FREQS = [0, 0.1, 0.2, 0.3, 0.4, 0.433, 0.5];
 /* ========== 绘制通带视图 (fIN < 5*fDATA) ========== */
 let hoverPB_X = null;
 
+function passbandXmax() {
+  const D = cascadeMode ? sincStages[0].D : P.D;
+  return Math.min(6 / D, 0.55);
+}
+
 function drawPassband() {
   const ctx = pbCtx;
-  const maxX = Math.min(6 / totalDecimation(), 0.55);
+  const maxX = passbandXmax();
 
   const curve = [];
   const N_PTS = 2000;
@@ -519,26 +524,28 @@ function drawPassband() {
   }
   YMIN = Math.max(YMIN, Y_FLOOR);
 
-  function xT(r) { return ML + (r / maxX) * (W - ML - MR); }
-  function yT(db) { return MT + (YMAX - db) / (YMAX - YMIN) * (H - MT - MB); }
+  const xLo = pbZoom.xMin, xHi = pbXmax();
+  const [yLo, yHi] = pbYrange();
+  function xT(r) { return ML + (r - xLo) / (xHi - xLo) * (W - ML - MR); }
+  function yT(db) { return MT + (yHi - db) / (yHi - yLo) * (H - MT - MB); }
 
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = C.canvasBg; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = C.canvasPlot; ctx.fillRect(ML, MT, W - ML - MR, H - MT - MB);
 
-  const yRange = YMAX - YMIN;
+  const yRange = yHi - yLo;
   ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
-  const xStep = autoStep(maxX, 6);
-  for (let x = 0; x <= maxX + 1e-9; x += xStep) {
+  const xStep = autoStep(xHi - xLo, 6);
+  for (let x = Math.ceil(xLo / xStep) * xStep; x <= xHi + 1e-9; x += xStep) {
     const px = xT(x); ctx.beginPath(); ctx.moveTo(px, MT); ctx.lineTo(px, H - MB); ctx.stroke();
   }
   const dbStep = autoStep(yRange, 6);
-  for (let db = Math.ceil(YMIN / dbStep) * dbStep; db <= YMAX; db += dbStep) {
+  for (let db = Math.ceil(yLo / dbStep) * dbStep; db <= yHi; db += dbStep) {
     const py = yT(db); if (py < MT || py > H - MB) continue;
     ctx.beginPath(); ctx.moveTo(ML, py); ctx.lineTo(ML + (W - ML - MR), py); ctx.stroke();
   }
 
-  if (0 >= YMIN && 0 <= YMAX) {
+  if (0 >= yLo && 0 <= yHi) {
     ctx.strokeStyle = C.comp; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
     ctx.beginPath(); ctx.moveTo(ML, yT(0)); ctx.lineTo(ML + (W - ML - MR), yT(0)); ctx.stroke();
     ctx.setLineDash([]);
@@ -590,17 +597,27 @@ function drawPassband() {
   });
 
   ctx.fillStyle = C.dim; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
-  for (let x = 0; x <= maxX + 1e-9; x += xStep) {
-    const px = xT(x);     ctx.fillText(x.toFixed(maxX < 0.1 ? 3 : maxX < 0.2 ? 2 : 1), px, H - MB + 18);
+  for (let x = Math.ceil(xLo / xStep) * xStep; x <= xHi + 1e-9; x += xStep) {
+    const px = xT(x);
+    if (freqMode === 'real') {
+      const freq = x * P.ODR;
+      let label;
+      if (freq >= 1e6) label = (freq / 1e6).toFixed(freq >= 0.1e6 ? 1 : 2) + ' MHz';
+      else if (freq >= 1e3) label = (freq / 1e3).toFixed(freq >= 10e3 ? 0 : 1) + ' kHz';
+      else label = freq.toFixed(0) + ' Hz';
+      ctx.fillText(label, px, H - MB + 18);
+    } else {
+      ctx.fillText(x.toFixed((xHi - xLo) < 0.1 ? 3 : (xHi - xLo) < 0.2 ? 2 : 1), px, H - MB + 18);
+    }
   }
-  ctx.fillText('归一化频率 f / ODR', ML + (W - ML - MR) / 2, H - 2);
+  ctx.fillText(freqMode === 'real' ? '频率' : '归一化频率 f / ODR', ML + (W - ML - MR) / 2, H - 2);
   ctx.textAlign = 'right';
-  for (let db = Math.ceil(YMIN / dbStep) * dbStep; db <= YMAX; db += dbStep) {
+  for (let db = Math.ceil(yLo / dbStep) * dbStep; db <= yHi; db += dbStep) {
     const py = yT(db); if (py < MT || py > H - MB) continue;
     ctx.fillText(db.toFixed(yRange > 50 ? 0 : 1) + ' dB', ML - 8, py + 4);
   }
 
-  if (hoverPB_X !== null && hoverPB_X >= 0 && hoverPB_X <= maxX) {
+  if (hoverPB_X !== null && hoverPB_X >= xLo && hoverPB_X <= xHi) {
     const hx = xT(hoverPB_X);
     const hf = hoverPB_X * P.ODR;
     const hDb = effectiveSinc_dB(hf);
@@ -624,7 +641,16 @@ function drawPassband() {
     ctx.beginPath(); ctx.roundRect(tipX, tipY, tipW, tipH, 6); ctx.fill(); ctx.stroke();
     ctx.font = '12px Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillStyle = C.dim;
-    ctx.fillText('f/ODR = ' + hoverPB_X.toFixed(4), tipX + 10, tipY + 18);
+    if (freqMode === 'real') {
+      const hFreq = hoverPB_X * P.ODR;
+      let hLabel;
+      if (hFreq >= 1e6) hLabel = (hFreq / 1e6).toFixed(2) + ' MHz';
+      else if (hFreq >= 1e3) hLabel = (hFreq / 1e3).toFixed(1) + ' kHz';
+      else hLabel = hFreq.toFixed(0) + ' Hz';
+      ctx.fillText('f = ' + hLabel, tipX + 10, tipY + 18);
+    } else {
+      ctx.fillText('f/ODR = ' + hoverPB_X.toFixed(4), tipX + 10, tipY + 18);
+    }
     let yOff = 36;
     if (cascadeMode) {
       for (let si = 0; si < sincStages.length; si++) {
@@ -677,6 +703,7 @@ function autoStep(range, targetLines) {
 
 /* ========== 绘制全范围视图 (fIN < fMOD/2) ========== */
 let hoverFR_X = null;
+let yMinA = -300, yMaxA = 0;
 
 function drawFullRange() {
   const ctx = frCtx;
@@ -700,30 +727,31 @@ function drawFullRange() {
   for (const p of pts) { if (p.sinc < yMin) yMin = p.sinc; if (p.sinc > yMax) yMax = p.sinc; }
   yMin = Math.max(yMin, Y_FLOOR);
   const margin = Math.max(1, (yMax - yMin) * 0.1);
-  const xMin = 0, xR = xMaxDef;
-  const yMinA = Math.floor((yMin - margin) / 10) * 10;
-  const yMaxA = Math.ceil((yMax + margin) / 5) * 5;
+  yMinA = Math.floor((yMin - margin) / 10) * 10;
+  yMaxA = Math.ceil((yMax + margin) / 5) * 5;
 
-  function xPx(frac) { return ML + (frac / xR) * (W - ML - MR); }
-  function yPx(db) { return MT + (yMaxA - db) / (yMaxA - yMinA) * (H - MT - MB); }
+  const xLo = frZoom.xMin, xHi = frXmax();
+  const [yLo, yHi] = frYrange();
+  function xPx(frac) { return ML + (frac - xLo) / (xHi - xLo) * (W - ML - MR); }
+  function yPx(db) { return MT + (yHi - db) / (yHi - yLo) * (H - MT - MB); }
 
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = C.canvasBg; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = C.canvasPlot; ctx.fillRect(ML, MT, W - ML - MR, H - MT - MB);
 
   ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
-  const xStep = autoStep(xR, 6);
-  for (let x = 0; x <= xR + 1e-9; x += xStep) {
+  const xStep = autoStep(xHi - xLo, 6);
+  for (let x = Math.ceil(xLo / xStep) * xStep; x <= xHi + 1e-9; x += xStep) {
     const px = xPx(x); ctx.beginPath(); ctx.moveTo(px, MT); ctx.lineTo(px, H - MB); ctx.stroke();
   }
-  const yR = yMaxA - yMinA;
+  const yR = yHi - yLo;
   const dbStep = autoStep(yR, 6);
-  for (let db = Math.ceil(yMinA / dbStep) * dbStep; db <= yMaxA; db += dbStep) {
+  for (let db = Math.ceil(yLo / dbStep) * dbStep; db <= yHi; db += dbStep) {
     const py = yPx(db); if (py < MT || py > H - MB) continue;
     ctx.beginPath(); ctx.moveTo(ML, py); ctx.lineTo(ML + (W - ML - MR), py); ctx.stroke();
   }
 
-  if (0 >= yMinA && 0 <= yMaxA) {
+  if (0 >= yLo && 0 <= yHi) {
     ctx.strokeStyle = C.comp; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
     ctx.beginPath(); ctx.moveTo(ML, yPx(0)); ctx.lineTo(ML + (W - ML - MR), yPx(0)); ctx.stroke();
     ctx.setLineDash([]);
@@ -767,22 +795,27 @@ function drawFullRange() {
   }
 
   ctx.fillStyle = C.dim; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
-  for (let x = 0; x <= xR + 1e-9; x += xStep) {
-    const px = xPx(x); const freq = x * P.fMOD;
-    let label;
-    if (freq >= 1e6) label = (freq / 1e6).toFixed(freq >= 0.1e6 ? 1 : 2) + ' MHz';
-    else if (freq >= 1e3) label = (freq / 1e3).toFixed(freq >= 10e3 ? 0 : 1) + ' kHz';
-    else label = freq.toFixed(0) + ' Hz';
-    ctx.fillText(label, px, H - MB + 18);
+  for (let x = Math.ceil(xLo / xStep) * xStep; x <= xHi + 1e-9; x += xStep) {
+    const px = xPx(x);
+    if (freqMode === 'real') {
+      const freq = x * P.fMOD;
+      let label;
+      if (freq >= 1e6) label = (freq / 1e6).toFixed(freq >= 0.1e6 ? 1 : 2) + ' MHz';
+      else if (freq >= 1e3) label = (freq / 1e3).toFixed(freq >= 10e3 ? 0 : 1) + ' kHz';
+      else label = freq.toFixed(0) + ' Hz';
+      ctx.fillText(label, px, H - MB + 18);
+    } else {
+      ctx.fillText(x.toFixed((xHi - xLo) < 0.1 ? 3 : (xHi - xLo) < 0.2 ? 2 : 1), px, H - MB + 18);
+    }
   }
-  ctx.fillText('频率', ML + (W - ML - MR) / 2, H - 2);
+  ctx.fillText(freqMode === 'real' ? '频率' : '归一化频率 f / fMOD', ML + (W - ML - MR) / 2, H - 2);
   ctx.textAlign = 'right';
-  for (let db = Math.ceil(yMinA / dbStep) * dbStep; db <= yMaxA; db += dbStep) {
+  for (let db = Math.ceil(yLo / dbStep) * dbStep; db <= yHi; db += dbStep) {
     const py = yPx(db); if (py < MT || py > H - MB) continue;
     ctx.fillText(db.toFixed(0) + ' dB', ML - 8, py + 4);
   }
 
-  if (hoverFR_X !== null && hoverFR_X >= 0 && hoverFR_X <= xR) {
+  if (hoverFR_X !== null && hoverFR_X >= xLo && hoverFR_X <= xHi) {
     const hf = hoverFR_X * P.fMOD;
     const hDb = effectiveSinc_dB(hf);
     const hx = xPx(hoverFR_X);
@@ -803,7 +836,11 @@ function drawFullRange() {
     ctx.beginPath(); ctx.roundRect(tipX, tipY, tipW, tipH, 6); ctx.fill(); ctx.stroke();
     ctx.font = '12px Consolas, monospace'; ctx.textAlign = 'left';
     ctx.fillStyle = C.dim;
-    ctx.fillText('频率 = ' + formatFreq(hf), tipX + 10, tipY + 20);
+    if (freqMode === 'norm') {
+      ctx.fillText('f/fMOD = ' + hoverFR_X.toFixed(4), tipX + 10, tipY + 20);
+    } else {
+      ctx.fillText('频率 = ' + formatFreq(hf), tipX + 10, tipY + 20);
+    }
     let yOff = 38;
     if (cascadeMode) {
       for (let si = 0; si < sincStages.length; si++) {
@@ -964,27 +1001,126 @@ document.getElementById('exportBtn').onclick = () => {
 };
 
 /* ========== 交互 ========== */
+const pbZoom = { xMin: 0, xMax: null, yMin: null, yMax: null };
+const frZoom = { xMin: 0, xMax: 0.5, yMin: null, yMax: null };
+
+function pbXmax() { return pbZoom.xMax !== null ? pbZoom.xMax : passbandXmax(); }
+function pbYrange() { return [pbZoom.yMin !== null ? pbZoom.yMin : YMIN, pbZoom.yMax !== null ? pbZoom.yMax : YMAX]; }
+function frXmax() { return frZoom.xMax !== null ? frZoom.xMax : 0.5; }
+function frYrange() { return [frZoom.yMin !== null ? frZoom.yMin : yMinA, frZoom.yMax !== null ? frZoom.yMax : yMaxA]; }
+
+function syncPBinputs() {
+  document.getElementById('pbXmin').value = pbZoom.xMin.toFixed(4);
+  document.getElementById('pbXmax').value = pbXmax().toFixed(4);
+  const [ylo, yhi] = pbYrange();
+  document.getElementById('pbYmin').value = ylo.toFixed(1);
+  document.getElementById('pbYmax').value = yhi.toFixed(1);
+}
+function syncFRinputs() {
+  document.getElementById('frXmin').value = frZoom.xMin.toFixed(4);
+  document.getElementById('frXmax').value = frXmax().toFixed(4);
+  const [ylo, yhi] = frYrange();
+  document.getElementById('frYmin').value = ylo.toFixed(1);
+  document.getElementById('frYmax').value = yhi.toFixed(1);
+}
+
 function seekPB(e) {
   const r = pbCanvas.getBoundingClientRect();
-  const maxX = Math.min(6 / totalDecimation(), 0.55);
-  hoverPB_X = Math.max(0, Math.min(maxX, (e.clientX - r.left - ML) / (W - ML - MR) * maxX));
+  const xMax = pbXmax();
+  hoverPB_X = Math.max(0, Math.min(xMax, (e.clientX - r.left - ML) / (W - ML - MR) * xMax));
   drawPassband();
 }
 function seekFR(e) {
   const r = frCanvas.getBoundingClientRect();
-  hoverFR_X = Math.max(0, Math.min(0.5, (e.clientX - r.left - ML) / (W - ML - MR) * 0.5));
+  const xMax = frXmax();
+  hoverFR_X = Math.max(0, Math.min(xMax, (e.clientX - r.left - ML) / (W - ML - MR) * xMax));
   drawFullRange();
 }
 
 let pbDrag = null, frDrag = null;
 
-pbCanvas.addEventListener('mousedown', e => { pbDrag = { sx: e.clientX, xMin0: Math.min(6/totalDecimation(),0.55) }; pbCanvas.style.cursor = 'grabbing'; });
-pbCanvas.addEventListener('mousemove', e => { if (pbDrag) return; seekPB(e); });
-frCanvas.addEventListener('mousedown', e => { frDrag = { sx: e.clientX }; frCanvas.style.cursor = 'grabbing'; });
-frCanvas.addEventListener('mousemove', e => { if (frDrag) return; seekFR(e); });
-window.addEventListener('mouseup', () => { pbDrag = null; frDrag = null; pbCanvas.style.cursor = 'crosshair'; frCanvas.style.cursor = 'crosshair'; });
+pbCanvas.addEventListener('mousedown', e => {
+  const r = pbCanvas.getBoundingClientRect();
+  pbDrag = { sx: e.clientX, sy: e.clientY, sxMin: pbZoom.xMin, sxMax: pbXmax(), syMin: pbZoom.yMin, syMax: pbYrange()[1] };
+  pbCanvas.style.cursor = 'grabbing';
+});
+pbCanvas.addEventListener('mousemove', e => {
+  if (pbDrag) {
+    const plotW = W - ML - MR;
+    const xRange = pbDrag.sxMax - pbDrag.sxMin;
+    const dx = -(e.clientX - pbDrag.sx) / plotW * xRange;
+    pbZoom.xMin = pbDrag.sxMin + dx;
+    pbZoom.xMax = pbDrag.sxMax + dx;
+    syncPBinputs();
+    drawPassband();
+    return;
+  }
+  seekPB(e);
+});
+frCanvas.addEventListener('mousedown', e => {
+  frDrag = { sx: e.clientX, sy: e.clientY, sxMin: frZoom.xMin, sxMax: frXmax(), syMin: frZoom.yMin, syMax: frYrange()[1] };
+  frCanvas.style.cursor = 'grabbing';
+});
+frCanvas.addEventListener('mousemove', e => {
+  if (frDrag) {
+    const plotW = W - ML - MR;
+    const xRange = frDrag.sxMax - frDrag.sxMin;
+    const dx = -(e.clientX - frDrag.sx) / plotW * xRange;
+    frZoom.xMin = frDrag.sxMin + dx;
+    frZoom.xMax = frDrag.sxMax + dx;
+    syncFRinputs();
+    drawFullRange();
+    return;
+  }
+  seekFR(e);
+});
+window.addEventListener('mouseup', () => {
+  if (pbDrag) { pbDrag = null; pbCanvas.style.cursor = 'crosshair'; }
+  if (frDrag) { frDrag = null; frCanvas.style.cursor = 'crosshair'; }
+});
 pbCanvas.addEventListener('mouseleave', () => { if (!pbDrag) { hoverPB_X = null; drawPassband(); } });
 frCanvas.addEventListener('mouseleave', () => { if (!frDrag) { hoverFR_X = null; drawFullRange(); } });
+
+function wheelZoom(canvas, zoom, e, getDefaultXmax, getDefaultYmin, getDefaultYmax, syncInputs, redraw) {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const plotW = W - ML - MR, plotH = H - MT - MB;
+  const mx = (e.clientX - r.left - ML) / plotW;
+  const my = (e.clientY - r.top - MT) / plotH;
+  const xMax = getDefaultXmax();
+  const [yMin0, yMax0] = [zoom.yMin !== null ? zoom.yMin : getDefaultYmin(), zoom.yMax !== null ? zoom.yMax : getDefaultYmax()];
+  const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+  const xLo = zoom.xMin, xHi = xMax;
+  const newXL = xLo + (mx) * (xHi - xLo) * (1 - 1 / factor);
+  const newXR = xHi - (1 - mx) * (xHi - xLo) * (1 - 1 / factor);
+  const newYB = yMin0 + (1 - my) * (yMax0 - yMin0) * (1 - 1 / factor);
+  const newYT = yMax0 - my * (yMax0 - yMin0) * (1 - 1 / factor);
+  zoom.xMin = newXL;
+  zoom.xMax = newXR;
+  zoom.yMin = newYB;
+  zoom.yMax = newYT;
+  syncInputs();
+  redraw();
+}
+
+pbCanvas.addEventListener('wheel', e => wheelZoom(pbCanvas, pbZoom, e,
+  () => pbZoom.xMax !== null ? pbZoom.xMax : passbandXmax(),
+  () => YMIN, () => YMAX, syncPBinputs, drawPassband), { passive: false });
+frCanvas.addEventListener('wheel', e => wheelZoom(frCanvas, frZoom, e,
+  () => frZoom.xMax !== null ? frZoom.xMax : 0.5,
+  () => yMinA, () => yMaxA, syncFRinputs, drawFullRange), { passive: false });
+
+document.getElementById('pbXmin').addEventListener('change', e => { pbZoom.xMin = parseFloat(e.target.value) || 0; drawPassband(); });
+document.getElementById('pbXmax').addEventListener('change', e => { pbZoom.xMax = parseFloat(e.target.value) || passbandXmax(); drawPassband(); });
+document.getElementById('pbYmin').addEventListener('change', e => { pbZoom.yMin = parseFloat(e.target.value); drawPassband(); });
+document.getElementById('pbYmax').addEventListener('change', e => { pbZoom.yMax = parseFloat(e.target.value); drawPassband(); });
+document.getElementById('frXmin').addEventListener('change', e => { frZoom.xMin = parseFloat(e.target.value) || 0; drawFullRange(); });
+document.getElementById('frXmax').addEventListener('change', e => { frZoom.xMax = parseFloat(e.target.value) || 0.5; drawFullRange(); });
+document.getElementById('frYmin').addEventListener('change', e => { frZoom.yMin = parseFloat(e.target.value); drawFullRange(); });
+document.getElementById('frYmax').addEventListener('change', e => { frZoom.yMax = parseFloat(e.target.value); drawFullRange(); });
+
+document.getElementById('pbResetZoom').onclick = () => { pbZoom.xMin = 0; pbZoom.xMax = null; pbZoom.yMin = null; pbZoom.yMax = null; syncPBinputs(); drawPassband(); };
+document.getElementById('frResetZoom').onclick = () => { frZoom.xMin = 0; frZoom.xMax = 0.5; frZoom.yMin = null; frZoom.yMax = null; syncFRinputs(); drawFullRange(); };
 
 /* ========== 视图切换（保留兼容，但实际两个视图始终显示） ========== */
 function setView(mode) {
