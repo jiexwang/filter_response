@@ -99,8 +99,9 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
 <body class="light">
 <div class="wrap">
   <div class="topnav">
-    <a class="active" id="navSinc" href="javascript:void(0)">Sinc⁶ 频响</a>
+    <a class="active" id="navSinc" href="javascript:void(0)">Sincᴺ 频率响应</a>
     <a id="navFir" href="javascript:void(0)">FIR 偶对称</a>
+    <a id="navComp" href="javascript:void(0)">补偿 FIR 设计</a>
     <button class="theme-btn" id="themeToggle">☀️ 浅色</button>
   </div>
 
@@ -114,7 +115,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
   <div class="panel controls">
     <div class="ctl-group">
       <label>级数 N</label>
-      <input type="number" id="stageInput" value="6" min="1" max="10" step="1" style="width:56px;">
+      <input type="number" id="stageInput" value="5" min="1" max="10" step="1" style="width:56px;">
     </div>
     <div class="ctl-group">
       <label>抽取率 D</label>
@@ -186,7 +187,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
         <input type="number" id="pbYmin" style="width:72px;" step="any"> ~
         <input type="number" id="pbYmax" style="width:72px;" step="any">
         <button class="ghost-btn" id="pbResetZoom" style="font-size:11px;">重置缩放</button>
-        <span style="margin-left:auto;font-size:11px;">滚轮缩放 · 拖拽平移</span>
+        <span style="margin-left:auto;font-size:11px;">滚轮=X缩放 Shift+滚轮=Y缩放 · 拖拽平移</span>
       </div>
       <div class="legend" id="passbandLegend">
         <span><i class="sw" style="background:var(--sinc);"></i><b style="color:var(--sinc);">Sinc<sup>N</sup></b> 实际响应</span>
@@ -206,7 +207,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
         <input type="number" id="frYmin" style="width:72px;" step="any"> ~
         <input type="number" id="frYmax" style="width:72px;" step="any">
         <button class="ghost-btn" id="frResetZoom" style="font-size:11px;">重置缩放</button>
-        <span style="margin-left:auto;font-size:11px;">滚轮缩放 · 拖拽平移</span>
+        <span style="margin-left:auto;font-size:11px;">滚轮=X缩放 Shift+滚轮=Y缩放 · 拖拽平移</span>
       </div>
       <div class="legend" id="fullrangeLegend">
         <span><i class="sw" style="background:var(--sinc);"></i><b style="color:var(--sinc);">Sinc<sup>N</sup></b> 频率响应</span>
@@ -298,6 +299,96 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
     </div>
   </div>
 
+  <!-- 补偿 FIR 设计 -->
+  <div id="compSection" style="display:none;">
+  <header>
+    <h1>补偿 FIR 设计 <span class="tag">交互式设计</span></h1>
+    <p>用窗函数法设计 1/Sinc<sup>N</sup> 补偿 FIR，可视化对比目标与实际响应</p>
+  </header>
+
+  <!-- 控制区 -->
+  <div class="panel controls">
+    <div class="ctl-group">
+      <label>级数 N</label>
+      <input type="number" id="compN" value="5" min="1" max="10" step="1" style="width:48px;">
+    </div>
+    <div class="ctl-group">
+      <label>抽取率 D</label>
+      <input type="number" id="compD" value="8" min="2" max="1000" step="1" style="width:48px;">
+    </div>
+    <div class="ctl-group">
+      <label>f<sub>MOD</sub></label>
+      <input type="number" id="compFmod" value="8192" min="1" max="100000" step="1" style="width:64px;">
+      <span style="font-size:12px;color:var(--dim);">kHz</span>
+    </div>
+    <div class="ctl-group">
+      <label>ODR</label>
+      <input type="number" id="compOdr" value="256000" min="1" max="10000000" step="1000" style="width:64px;">
+      <span style="font-size:12px;color:var(--dim);">sps</span>
+    </div>
+  </div>
+  <div class="panel controls">
+    <div class="ctl-group">
+      <label>FIR 长度</label>
+      <input type="number" id="compTaps" value="46" min="4" max="256" step="2" style="width:56px;">
+      <span style="font-size:12px;color:var(--dim);">tap</span>
+    </div>
+    <div class="ctl-group">
+      <label>窗函数</label>
+      <select id="compWindow" style="width:130px;">
+        <option value="hamming" selected>Hamming</option>
+        <option value="hanning">Hanning</option>
+        <option value="blackman">Blackman</option>
+        <option value="blackman-harris">Blackman-Harris</option>
+      </select>
+    </div>
+    <div class="ctl-group">
+      <label>通带截止 f/f<sub>DATA</sub></label>
+      <input type="number" id="compFpass" value="0.433" min="0.01" max="0.499" step="0.001" style="width:64px;">
+    </div>
+    <div class="ctl-group">
+      <label>阻带起始 f/f<sub>DATA</sub></label>
+      <input type="number" id="compFstop" value="0.5" min="0.1" max="1.0" step="0.001" style="width:64px;">
+    </div>
+    <div class="ctl-group">
+      <button class="ghost-btn" id="compCopyBtn">⬇ 复制系数</button>
+    </div>
+  </div>
+
+  <!-- 关键指标 -->
+  <div class="panel" id="compKP">
+    <div class="kp-grid" id="compKPGrid"></div>
+  </div>
+
+  <!-- 波形区 -->
+  <div class="panel">
+    <div style="font-size:13px;font-weight:700;margin-bottom:6px;color:var(--dim);">补偿 FIR 频率响应 <span style="font-weight:normal;font-size:11px;">f<sub>IN</sub> &lt; 0.5 f<sub>MOD</sub></span></div>
+    <canvas id="compCanvas" width="1100" height="400" style="width:100%;display:block;cursor:crosshair;"></canvas>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap;font-size:12px;color:var(--dim);">
+      <span>X:</span>
+      <input type="number" id="compXmin" style="width:72px;" step="any"> ~
+      <input type="number" id="compXmax" style="width:72px;" step="any">
+      <span>Y (dB):</span>
+      <input type="number" id="compYmin" style="width:72px;" step="any"> ~
+      <input type="number" id="compYmax" style="width:72px;" step="any">
+      <button class="ghost-btn" id="compResetZoom" style="font-size:11px;">重置缩放</button>
+      <span style="margin-left:auto;font-size:11px;">滚轮=X缩放 Shift+滚轮=Y缩放 · 拖拽平移</span>
+    </div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--target);"></i><b style="color:var(--target);">1/Sinc<sup>N</sup></b> 目标</span>
+      <span><i class="sw" style="background:var(--sinc);"></i><b style="color:var(--sinc);">FIR</b> 补偿器</span>
+      <span><i class="sw" style="background:var(--comp);"></i><b style="color:var(--comp);">Sinc×FIR</b> 总响应</span>
+      <span><b style="color:var(--accent);">│</b> 游标</span>
+    </div>
+  </div>
+
+  <!-- 系数输出 -->
+  <div class="panel">
+    <div style="font-size:13px;font-weight:700;margin-bottom:6px;color:var(--dim);">FIR 系数</div>
+    <textarea id="compCoeffOutput" rows="4" readonly style="width:100%;font-family:monospace;font-size:12px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px;resize:vertical;"></textarea>
+  </div>
+  </div><!-- /compSection -->
+
   <footer>Sinc<sup>N</sup> 频率响应交互演示 · AD7768-1 数字滤波器学习</footer>
 </div>
 
@@ -328,7 +419,7 @@ let viewMode = 'both';
 let freqMode = 'norm'; // 'norm' | 'real'
 
 /* ========== 参数 ========== */
-let P = { N: 6, D: 8, fMOD: 8.192e6, ODR: 256e3, showComp: true };
+let P = { N: 5, D: 8, fMOD: 8.192e6, ODR: 256e3, showComp: true };
 
 /* ========== 级联 Sinc ========== */
 let cascadeMode = false;
@@ -386,8 +477,15 @@ function renderCascadeUI() {
       const idx = parseInt(this.dataset.idx);
       const field = this.dataset.field;
       sincStages[idx][field] = Math.max(1, parseInt(this.value) || 1);
+      if (idx === 0) {
+        P[field] = sincStages[0][field];
+        if (field === 'N') document.getElementById('stageInput').value = P.N;
+        if (field === 'D') document.getElementById('decInput').value = P.D;
+      }
       document.getElementById('totalDec').textContent = totalDecimation();
       syncODR();
+      pbZoom.xMin = 0; pbZoom.xMax = null; pbZoom.yMin = null; pbZoom.yMax = null;
+      syncPBinputs();
       resetFRzoom();
       updateKP(); drawPassband(); drawFullRange();
     };
@@ -397,9 +495,15 @@ function renderCascadeUI() {
       const idx = parseInt(this.dataset.idx);
       if (sincStages.length <= 1) return;
       sincStages.splice(idx, 1);
+      P.N = sincStages[0].N;
+      P.D = sincStages[0].D;
+      document.getElementById('stageInput').value = P.N;
+      document.getElementById('decInput').value = P.D;
       renderCascadeUI();
       document.getElementById('totalDec').textContent = totalDecimation();
       syncODR();
+      pbZoom.xMin = 0; pbZoom.xMax = null; pbZoom.yMin = null; pbZoom.yMax = null;
+      syncPBinputs();
       resetFRzoom();
       updateKP(); drawPassband(); drawFullRange();
     };
@@ -454,7 +558,7 @@ function tX(x) { return (x - ML) / (W - ML - MR) * XMAX_R; }
 function yT(db) { return MT + (YMAX - db) / (YMAX - YMIN) * (H - MT - MB); }
 
 /* ========== 缩放状态 ========== */
-const Y_FLOOR = -300;
+const Y_FLOOR = -500;
 
 /* ========== 曲线计算（保留兼容） ========== */
 function computeCurvePassband() {
@@ -501,8 +605,7 @@ function passbandXmax() {
 }
 
 function frDefaultXmax() {
-  if (cascadeMode) return Math.min(4 / sincStages[0].D, 0.5);
-  return 0.5;
+  return 1.0;
 }
 
 function resetFRzoom() {
@@ -563,6 +666,11 @@ function drawPassband() {
     ctx.beginPath(); ctx.moveTo(ML, py); ctx.lineTo(ML + (W - ML - MR), py); ctx.stroke();
   }
 
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ML, MT, W - ML - MR, H - MT - MB);
+  ctx.clip();
+
   if (0 >= yLo && 0 <= yHi) {
     ctx.strokeStyle = C.comp; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
     ctx.beginPath(); ctx.moveTo(ML, yT(0)); ctx.lineTo(ML + (W - ML - MR), yT(0)); ctx.stroke();
@@ -613,6 +721,8 @@ function drawPassband() {
     ctx.fillStyle = isDark ? '#fff' : '#000';
     ctx.beginPath(); ctx.arc(px, py, 2, 0, 2 * Math.PI); ctx.fill();
   });
+
+  ctx.restore();
 
   ctx.fillStyle = C.dim; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
   for (let x = Math.ceil(xLo / xStep) * xStep; x <= xHi + 1e-9; x += xStep) {
@@ -685,6 +795,7 @@ function drawPassband() {
       ctx.fillText('补偿目标 = ' + (-hDb).toFixed(4) + ' dB', tipX + 10, tipY + yOff);
     }
   }
+  ctx.restore();
 }
 
 function p_stagesAtFreq(f, si) {
@@ -727,8 +838,9 @@ function drawFullRange() {
   const ctx = frCtx;
   const pts = [];
   const N_PTS = 4000;
+  const xSpan = frXmax();
   for (let i = 0; i < N_PTS; i++) {
-    const frac = (i / (N_PTS - 1)) * 0.5;
+    const frac = (i / (N_PTS - 1)) * xSpan;
     const f = frac * P.fMOD;
     if (cascadeMode) {
       const stages = sincStages.map((s, i) => 20 * Math.log10(Math.max(sincN(f, s.N, s.D, stageFmod(i)), 1e-30)));
@@ -744,7 +856,7 @@ function drawFullRange() {
   for (const p of pts) { if (p.sinc < yMin) yMin = p.sinc; if (p.sinc > yMax) yMax = p.sinc; }
   yMin = Math.max(yMin, Y_FLOOR);
   const margin = Math.max(1, (yMax - yMin) * 0.1);
-  yMinA = Math.floor((yMin - margin) / 10) * 10;
+  yMinA = -300;
   yMaxA = Math.ceil((yMax + margin) / 5) * 5;
 
   const xLo = frZoom.xMin, xHi = frXmax();
@@ -755,6 +867,10 @@ function drawFullRange() {
   ctx.clearRect(0, 0, W, H);
   ctx.fillStyle = C.canvasBg; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = C.canvasPlot; ctx.fillRect(ML, MT, W - ML - MR, H - MT - MB);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ML, MT, W - ML - MR, H - MT - MB);
+  ctx.clip();
 
   ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
   const xStep = autoStep(xHi - xLo, 6);
@@ -810,6 +926,8 @@ function drawFullRange() {
     ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#0891b2';
     ctx.fillText((z.x * P.fMOD / 1e6).toFixed(2) + ' MHz', px, markerY - 10);
   }
+
+  ctx.restore();
 
   ctx.fillStyle = C.dim; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
   for (let x = Math.ceil(xLo / xStep) * xStep; x <= xHi + 1e-9; x += xStep) {
@@ -1098,7 +1216,7 @@ frCanvas.addEventListener('mousemove', e => {
     frZoom.xMin = frDrag.sxMin + dx;
     frZoom.xMax = frDrag.sxMax + dx;
     if (frZoom.xMin < 0) { frZoom.xMax -= frZoom.xMin; frZoom.xMin = 0; }
-    if (frZoom.xMax > 0.5) { frZoom.xMin -= (frZoom.xMax - 0.5); frZoom.xMax = 0.5; }
+    if (frZoom.xMax > 1.0) { frZoom.xMin -= (frZoom.xMax - 1.0); frZoom.xMax = 1.0; }
     if (frZoom.xMin < 0) frZoom.xMin = 0;
     frZoom.yMin = frDrag.syMin + dy;
     frZoom.yMax = frDrag.syMax + dy;
@@ -1115,44 +1233,52 @@ window.addEventListener('mouseup', () => {
 pbCanvas.addEventListener('mouseleave', () => { if (!pbDrag) { hoverPB_X = null; drawPassband(); } });
 frCanvas.addEventListener('mouseleave', () => { if (!frDrag) { hoverFR_X = null; drawFullRange(); } });
 
-function wheelZoom(canvas, zoom, e, getDefaultXmax, getDefaultYmin, getDefaultYmax, syncInputs, redraw) {
+function wheelZoom(canvas, zoom, e, getDefaultXmax, getDefaultYmin, getDefaultYmax, syncInputs, redraw, xMaxCeiling, axis) {
   e.preventDefault();
   const r = canvas.getBoundingClientRect();
   const plotW = W - ML - MR, plotH = H - MT - MB;
   const mx = (e.clientX - r.left - ML) / plotW;
   const my = (e.clientY - r.top - MT) / plotH;
-  const xMax = getDefaultXmax();
+  const ceiling = xMaxCeiling != null ? xMaxCeiling : getDefaultXmax();
   const [yMin0, yMax0] = [zoom.yMin !== null ? zoom.yMin : getDefaultYmin(), zoom.yMax !== null ? zoom.yMax : getDefaultYmax()];
   const factor = e.deltaY > 0 ? 1 / 1.15 : 1.15;
-  const xLo = zoom.xMin, xHi = xMax;
-  const newXL = xLo + (mx) * (xHi - xLo) * (1 - 1 / factor);
-  const newXR = xHi - (1 - mx) * (xHi - xLo) * (1 - 1 / factor);
-  const newYB = yMin0 + (1 - my) * (yMax0 - yMin0) * (1 - 1 / factor);
-  const newYT = yMax0 - my * (yMax0 - yMin0) * (1 - 1 / factor);
-  zoom.xMin = newXL;
-  zoom.xMax = newXR;
-  if (zoom.xMin < 0) { zoom.xMax -= zoom.xMin; zoom.xMin = 0; }
-  if (zoom.xMax > 0.5) { zoom.xMin -= (zoom.xMax - 0.5); zoom.xMax = 0.5; }
-  if (zoom.xMin < 0) zoom.xMin = 0;
-  zoom.yMin = newYB;
-  zoom.yMax = newYT;
+  const xLo = zoom.xMin, xHi = getDefaultXmax();
+  const scale = 1 - 1 / factor;
+
+  if (axis !== 'y') {
+    const newXL = xLo + mx * (xHi - xLo) * scale;
+    const newXR = xHi - (1 - mx) * (xHi - xLo) * scale;
+    zoom.xMin = newXL;
+    zoom.xMax = newXR;
+    if (zoom.xMin < 0) { zoom.xMax -= zoom.xMin; zoom.xMin = 0; }
+    if (zoom.xMax > ceiling) { zoom.xMin -= (zoom.xMax - ceiling); zoom.xMax = ceiling; }
+    if (zoom.xMin < 0) zoom.xMin = 0;
+  }
+
+  if (axis !== 'x') {
+    const newYB = yMin0 + (1 - my) * (yMax0 - yMin0) * scale;
+    const newYT = yMax0 - my * (yMax0 - yMin0) * scale;
+    zoom.yMin = newYB;
+    zoom.yMax = newYT;
+  }
+
   syncInputs();
   redraw();
 }
 
 pbCanvas.addEventListener('wheel', e => wheelZoom(pbCanvas, pbZoom, e,
   () => pbZoom.xMax !== null ? pbZoom.xMax : passbandXmax(),
-  () => YMIN, () => YMAX, syncPBinputs, drawPassband), { passive: false });
+  () => YMIN, () => YMAX, syncPBinputs, drawPassband, null, e.shiftKey ? 'y' : 'x'), { passive: false });
 frCanvas.addEventListener('wheel', e => wheelZoom(frCanvas, frZoom, e,
   () => frZoom.xMax !== null ? frZoom.xMax : frDefaultXmax(),
-  () => yMinA, () => yMaxA, syncFRinputs, drawFullRange), { passive: false });
+  () => yMinA, () => yMaxA, syncFRinputs, drawFullRange, 1.0, e.shiftKey ? 'y' : 'x'), { passive: false });
 
 document.getElementById('pbXmin').addEventListener('change', e => { pbZoom.xMin = parseFloat(e.target.value) || 0; drawPassband(); });
 document.getElementById('pbXmax').addEventListener('change', e => { pbZoom.xMax = parseFloat(e.target.value) || passbandXmax(); drawPassband(); });
 document.getElementById('pbYmin').addEventListener('change', e => { pbZoom.yMin = parseFloat(e.target.value); drawPassband(); });
 document.getElementById('pbYmax').addEventListener('change', e => { pbZoom.yMax = parseFloat(e.target.value); drawPassband(); });
-document.getElementById('frXmin').addEventListener('change', e => { frZoom.xMin = parseFloat(e.target.value) || 0; drawFullRange(); });
-document.getElementById('frXmax').addEventListener('change', e => { frZoom.xMax = parseFloat(e.target.value) || frDefaultXmax(); drawFullRange(); });
+document.getElementById('frXmin').addEventListener('change', e => { frZoom.xMin = Math.max(parseFloat(e.target.value) || 0, 0); drawFullRange(); });
+document.getElementById('frXmax').addEventListener('change', e => { frZoom.xMax = Math.min(parseFloat(e.target.value) || frDefaultXmax(), 1.0); drawFullRange(); });
 document.getElementById('frYmin').addEventListener('change', e => { frZoom.yMin = parseFloat(e.target.value); drawFullRange(); });
 document.getElementById('frYmax').addEventListener('change', e => { frZoom.yMax = parseFloat(e.target.value); drawFullRange(); });
 
@@ -1195,10 +1321,12 @@ function syncODR() {
 
 document.getElementById('stageInput').onchange = e => {
   P.N = Math.max(1, Math.min(10, parseInt(e.target.value) || 6));
+  if (sincStages.length > 0) sincStages[0].N = P.N;
   updateKP(); drawPassband(); drawFullRange();
 };
 document.getElementById('decInput').onchange = e => {
   P.D = Math.max(2, Math.min(1000, parseInt(e.target.value) || 8));
+  if (sincStages.length > 0) sincStages[0].D = P.D;
   syncODR();
   updateKP(); drawPassband(); drawFullRange();
 };
@@ -1226,7 +1354,20 @@ document.getElementById('cascadeToggle').onchange = function() {
   document.getElementById('cascadePanel').style.display = cascadeMode ? '' : 'none';
   document.getElementById('stageInput').closest('.ctl-group').style.display = cascadeMode ? 'none' : '';
   document.getElementById('decInput').closest('.ctl-group').style.display = cascadeMode ? 'none' : '';
+  if (cascadeMode) {
+    sincStages[0].N = P.N;
+    sincStages[0].D = P.D;
+    renderCascadeUI();
+    document.getElementById('totalDec').textContent = totalDecimation();
+  } else {
+    P.N = sincStages[0].N;
+    P.D = sincStages[0].D;
+    document.getElementById('stageInput').value = P.N;
+    document.getElementById('decInput').value = P.D;
+  }
   syncODR();
+  pbZoom.xMin = 0; pbZoom.xMax = null; pbZoom.yMin = null; pbZoom.yMax = null;
+  syncPBinputs();
   resetFRzoom();
   updateKP(); drawPassband(); drawFullRange();
   updateLegend();
@@ -1237,6 +1378,8 @@ document.getElementById('addStageBtn').onclick = function() {
   renderCascadeUI();
   document.getElementById('totalDec').textContent = totalDecimation();
   syncODR();
+  pbZoom.xMin = 0; pbZoom.xMax = null; pbZoom.yMin = null; pbZoom.yMax = null;
+  syncPBinputs();
   resetFRzoom();
   updateKP(); drawPassband(); drawFullRange();
 };
@@ -1274,19 +1417,380 @@ function updateLegend() {
   }
 }
 
+/* ========== 补偿 FIR 设计 ========== */
+const compCanvas = document.getElementById('compCanvas');
+const compCtx = compCanvas.getContext('2d');
+let compCoeffs = [];
+let compHoverX = null;
+let compTargetDBCache = [];
+let compFIRDBCache = [];
+let compXmax = 0.55;
+let compPassbandXmax = Math.min(6 / 8, 0.55);
+let compYmin = -30, compYmax = 10;
+
+const compZoom = { xMin: 0, xMax: null, yMin: null, yMax: null, isDefault: true };
+
+function compSyncSincFromMain() {
+  document.getElementById('compN').value = P.N;
+  document.getElementById('compD').value = P.D;
+  document.getElementById('compFmod').value = P.fMOD / 1e3;
+  document.getElementById('compOdr').value = P.ODR;
+}
+function compSyncSincToMain() {
+  const newN = parseInt(document.getElementById('compN').value) || P.N;
+  const newD = parseInt(document.getElementById('compD').value) || P.D;
+  const newFmod = (parseFloat(document.getElementById('compFmod').value) || P.fMOD / 1e3) * 1e3;
+  const newOdr = parseInt(document.getElementById('compOdr').value) || P.ODR;
+  if (newN !== P.N || newD !== P.D || newFmod !== P.fMOD || newOdr !== P.ODR) {
+    P.N = newN; P.D = newD; P.fMOD = newFmod; P.ODR = newOdr;
+    document.getElementById('stageInput').value = P.N;
+    document.getElementById('decInput').value = P.D;
+    document.getElementById('fmodInput').value = P.fMOD / 1e3;
+    document.getElementById('odrInput').value = P.ODR;
+    if (sincStages.length > 0) {
+      sincStages[0].N = P.N; sincStages[0].D = P.D;
+      const boxes = document.querySelectorAll('#cascadeStages .cascade-stage');
+      if (boxes.length > 0) { boxes[0].querySelectorAll('input[type=number]')[0].value = P.N; boxes[0].querySelectorAll('input[type=number]')[1].value = P.D; }
+    }
+  }
+}
+
+function compWindowFn(type, n, N) {
+  const t = n / (N - 1);
+  switch (type) {
+    case 'hanning': return 0.5 - 0.5 * Math.cos(2 * Math.PI * t);
+    case 'blackman': return 0.42 - 0.5 * Math.cos(2 * Math.PI * t) + 0.08 * Math.cos(4 * Math.PI * t);
+    case 'blackman-harris': return 0.35875 - 0.48829 * Math.cos(2 * Math.PI * t) + 0.14128 * Math.cos(4 * Math.PI * t) - 0.01168 * Math.cos(6 * Math.PI * t);
+    default: return 0.54 - 0.46 * Math.cos(2 * Math.PI * t);
+  }
+}
+
+function compFreqResp(coeffs, fNorm) {
+  let re = 0, im = 0;
+  for (let n = 0; n < coeffs.length; n++) {
+    const angle = -2 * Math.PI * fNorm * n;
+    re += coeffs[n] * Math.cos(angle);
+    im += coeffs[n] * Math.sin(angle);
+  }
+  return Math.sqrt(re * re + im * im);
+}
+
+function compDesign() {
+  compSyncSincToMain();
+  const nTaps = parseInt(document.getElementById('compTaps').value) || 46;
+  const winType = document.getElementById('compWindow').value;
+  const fPass = parseFloat(document.getElementById('compFpass').value) || 0.433;
+  const fStop = parseFloat(document.getElementById('compFstop').value) || 0.5;
+  const N = P.N, D = P.D;
+
+  const M = 1024;
+  const h = new Float64Array(nTaps);
+  for (let n = 0; n < nTaps; n++) {
+    let sum = 0;
+    for (let k = 0; k < M; k++) {
+      const fNorm = k / M * 0.5;
+      const f = fNorm * P.fMOD;
+      let target;
+      if (fNorm <= fPass) {
+        target = 1.0 / Math.max(sincN(f, N, D, P.fMOD), 1e-15);
+      } else if (fNorm < fStop) {
+        const t = (fNorm - fPass) / (fStop - fPass);
+        const compAtEdge = 1.0 / Math.max(sincN(fPass * P.fMOD, N, D, P.fMOD), 1e-15);
+        target = compAtEdge * (1 - t);
+      } else {
+        target = 0;
+      }
+      const phase = -Math.PI * fNorm * (nTaps - 1);
+      sum += target * Math.cos(phase);
+    }
+    h[n] = 2 * sum / M;
+  }
+  const win = new Float64Array(nTaps);
+  for (let n = 0; n < nTaps; n++) win[n] = compWindowFn(winType, n, nTaps);
+  for (let n = 0; n < nTaps; n++) h[n] *= win[n];
+  const dcGain = h.reduce((a, b) => a + b, 0);
+  for (let n = 0; n < nTaps; n++) h[n] /= dcGain;
+  compCoeffs = Array.from(h);
+
+  document.getElementById('compCoeffOutput').value = compCoeffs.map(c => c.toFixed(8)).join(', ');
+
+  let passRipple = 0, stopAtten = -Infinity;
+  for (let k = 1; k <= 200; k++) {
+    const fNorm = k / 400 * fPass;
+    const f = fNorm * P.fMOD;
+    const resp = compFreqResp(compCoeffs, fNorm);
+    const target = 1.0 / Math.max(sincN(f, N, D, P.fMOD), 1e-15);
+    const err = Math.abs(20 * Math.log10(Math.max(resp * target, 1e-30)));
+    if (err > passRipple) passRipple = err;
+  }
+  for (let k = 0; k <= 200; k++) {
+    const fNorm = fStop + k / 200 * (0.5 - fStop);
+    const resp = compFreqResp(compCoeffs, fNorm);
+    const db = 20 * Math.log10(Math.max(resp, 1e-30));
+    if (db > stopAtten) stopAtten = db;
+  }
+  const dcG = compCoeffs.reduce((a, b) => a + b, 0);
+  document.getElementById('compKPGrid').innerHTML =
+    `<div class="kp-item"><div class="freq">通带纹波</div><div class="val">${passRipple < 0.001 ? '<0.001' : passRipple.toFixed(3)} mdB</div></div>` +
+    `<div class="kp-item"><div class="freq">阻带衰减</div><div class="val" style="color:${Math.abs(stopAtten) > 100 ? 'var(--comp)' : 'var(--target)'};">${stopAtten.toFixed(1)} dB</div></div>` +
+    `<div class="kp-item"><div class="freq">DC 增益</div><div class="val">${dcG.toFixed(6)}</div></div>` +
+    `<div class="kp-item"><div class="freq">系数数量</div><div class="val">${nTaps} tap</div></div>`;
+
+  compPassbandXmax = Math.min(6 / P.D, 0.55);
+  compAutoYRange();
+  compZoom.xMin = 0; compZoom.xMax = null; compZoom.yMin = null; compZoom.yMax = null;
+  compSyncInputs();
+  drawComp();
+}
+
+function compAutoYRange() {
+  const fPass = parseFloat(document.getElementById('compFpass').value) || 0.433;
+  const N = P.N, D = P.D;
+  const PASS_PTS = 300;
+  let ylo = Infinity, yhi = -Infinity;
+  for (let k = 0; k <= PASS_PTS; k++) {
+    const fNorm = (k / PASS_PTS) * fPass;
+    const f = fNorm * P.fMOD;
+    if (compCoeffs.length > 0) {
+      const sincV = sincN(f, N, D, P.fMOD);
+      const firV = compFreqResp(compCoeffs, fNorm);
+      const combinedDB = 20 * Math.log10(Math.max(sincV * firV, 1e-30));
+      if (combinedDB < ylo) ylo = combinedDB;
+      if (combinedDB > yhi) yhi = combinedDB;
+      const firDB = 20 * Math.log10(Math.max(firV, 1e-30));
+      if (firDB < ylo) ylo = firDB;
+      if (firDB > yhi) yhi = firDB;
+    }
+  }
+  if (ylo === Infinity) { compYmin = -30; compYmax = 10; return; }
+  const margin = Math.max(3, (yhi - ylo) * 0.2);
+  compYmin = Math.floor((ylo - margin) / 5) * 5;
+  compYmax = Math.ceil((yhi + margin) / 5) * 5;
+  if (compYmax < 5) compYmax = 5;
+}
+
+function compSyncInputs() {
+  document.getElementById('compXmin').value = compZoom.xMin.toFixed(4);
+  document.getElementById('compXmax').value = (compZoom.xMax !== null ? compZoom.xMax : compPassbandXmax).toFixed(4);
+  const [ylo, yhi] = compYrange();
+  document.getElementById('compYmin').value = ylo.toFixed(1);
+  document.getElementById('compYmax').value = yhi.toFixed(1);
+}
+
+function compXrange() { return [compZoom.xMin, compZoom.xMax !== null ? compZoom.xMax : compPassbandXmax]; }
+function compYrange() { return [compZoom.yMin !== null ? compZoom.yMin : compYmin, compZoom.yMax !== null ? compZoom.yMax : compYmax]; }
+
+function drawComp() {
+  const ctx = compCtx;
+  dpr = window.devicePixelRatio || 1;
+  W = compCanvas.clientWidth;
+  H = 400;
+  compCanvas.width = W * dpr; compCanvas.height = H * dpr;
+  compCanvas.style.height = H + 'px';
+  compCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const xHi = compZoom.xMax !== null ? compZoom.xMax : compXmax;
+  const xLo = compZoom.xMin;
+  const [yLo, yHi_] = compYrange();
+  function xT(frac) { return ML + (frac - xLo) / (xHi - xLo) * (W - ML - MR); }
+  function yT(db) { return MT + (yHi_ - db) / (yHi_ - yLo) * (H - MT - MB); }
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = C.canvasBg; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = C.canvasPlot; ctx.fillRect(ML, MT, W - ML - MR, H - MT - MB);
+
+  const xStep = autoStep(xHi - xLo, 6);
+  ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+  ctx.fillStyle = C.dim; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  for (let x = Math.ceil(xLo / xStep) * xStep; x <= xHi + 1e-9; x += xStep) {
+    const px = xT(x);
+    ctx.beginPath(); ctx.moveTo(px, MT); ctx.lineTo(px, H - MB); ctx.stroke();
+    ctx.fillText(x.toFixed((xHi - xLo) < 0.2 ? 3 : (xHi - xLo) < 0.5 ? 2 : 1), px, H - MB + 16);
+  }
+  const dbStep = autoStep(yHi_ - yLo, 6);
+  ctx.textAlign = 'right';
+  for (let db = Math.ceil(yLo / dbStep) * dbStep; db <= yHi_; db += dbStep) {
+    const py = yT(db);
+    if (py < MT || py > H - MB) continue;
+    ctx.beginPath(); ctx.moveTo(ML, py); ctx.lineTo(ML + (W - ML - MR), py); ctx.stroke();
+    ctx.fillText(db.toFixed(dbStep < 1 ? 1 : 0) + ' dB', ML - 8, py + 4);
+  }
+  ctx.fillText('f / fDATA', ML + (W - ML - MR) / 2, H - 2);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ML, MT, W - ML - MR, H - MT - MB);
+  ctx.clip();
+
+  if (0 >= yLo && 0 <= yHi_) {
+    ctx.strokeStyle = C.comp; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(ML, yT(0)); ctx.lineTo(ML + (W - ML - MR), yT(0)); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  const nPts = 500;
+  compTargetDBCache = [];
+  compFIRDBCache = [];
+
+  ctx.strokeStyle = C.target; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+  ctx.beginPath(); let started = false;
+  for (let i = 0; i <= nPts; i++) {
+    const fNorm = xLo + (i / nPts) * (xHi - xLo);
+    const f = fNorm * P.fMOD;
+    const targetDB = -sincN_dB(f);
+    compTargetDBCache.push(targetDB);
+    const py = yT(targetDB);
+    const px = xT(fNorm);
+    if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
+    if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+
+  if (compCoeffs.length > 0) {
+    ctx.strokeStyle = C.sinc; ctx.lineWidth = 2.5;
+    ctx.beginPath(); started = false;
+    for (let i = 0; i <= nPts; i++) {
+      const fNorm = xLo + (i / nPts) * (xHi - xLo);
+      const resp = compFreqResp(compCoeffs, fNorm);
+      const db = 20 * Math.log10(Math.max(resp, 1e-30));
+      compFIRDBCache.push(db);
+      const py = yT(db);
+      const px = xT(fNorm);
+      if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
+      if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  if (compHoverX !== null && compHoverX >= xLo && compHoverX <= xHi) {
+    const hx = xT(compHoverX);
+    const hf = compHoverX * P.fMOD;
+    ctx.strokeStyle = isDark ? 'rgba(121,192,255,.4)' : 'rgba(37,99,235,.3)';
+    ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(hx, MT); ctx.lineTo(hx, H - MB); ctx.stroke(); ctx.setLineDash([]);
+
+    const targetDB = -sincN_dB(hf);
+    const resp = compCoeffs.length > 0 ? compFreqResp(compCoeffs, compHoverX) : 0;
+    const firDB = 20 * Math.log10(Math.max(resp, 1e-30));
+
+    ctx.fillStyle = C.sinc; ctx.shadowColor = C.sinc; ctx.shadowBlur = 10;
+    ctx.beginPath(); ctx.arc(hx, yT(firDB), 5, 0, 2 * Math.PI); ctx.fill(); ctx.shadowBlur = 0;
+
+    ctx.fillStyle = C.target;
+    ctx.beginPath(); ctx.arc(hx, yT(targetDB), 4, 0, 2 * Math.PI); ctx.fill();
+
+    const tipW = 220, tipH = 56;
+    let tipX = hx + 12, tipY = MT + 10;
+    if (tipX + tipW > W - MR) tipX = hx - tipW - 12;
+    ctx.fillStyle = isDark ? 'rgba(19,26,35,.92)' : 'rgba(255,255,255,.92)';
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(tipX, tipY, tipW, tipH, 6); ctx.fill(); ctx.stroke();
+    ctx.font = '12px monospace'; ctx.textAlign = 'left';
+    ctx.fillStyle = C.target;
+    ctx.fillText('目标 1/Sinc = ' + targetDB.toFixed(3) + ' dB', tipX + 10, tipY + 18);
+    ctx.fillStyle = C.sinc;
+    ctx.fillText('FIR 实际   = ' + firDB.toFixed(3) + ' dB', tipX + 10, tipY + 36);
+  }
+}
+
+compCanvas.addEventListener('mousemove', e => {
+  const r = compCanvas.getBoundingClientRect();
+  const [xLo, xHi] = compXrange();
+  compHoverX = Math.max(xLo, Math.min(xHi, (e.clientX - r.left - ML) / (W - ML - MR) * (xHi - xLo) + xLo));
+  drawComp();
+});
+compCanvas.addEventListener('mouseleave', () => { compHoverX = null; drawComp(); });
+
+compCanvas.addEventListener('mousedown', e => {
+  const [ylo, yhi] = compYrange();
+  compDrag = { sx: e.clientX, sy: e.clientY, sxMin: compZoom.xMin, sxMax: compXrange()[1], syMin: ylo, syMax: yhi };
+  compCanvas.style.cursor = 'grabbing';
+});
+compCanvas.addEventListener('mousemove', e => {
+  if (typeof compDrag !== 'undefined' && compDrag) {
+    const plotW = W - ML - MR, plotH = H - MT - MB;
+    const dx = -(e.clientX - compDrag.sx) / plotW * (compDrag.sxMax - compDrag.sxMin);
+    const dy = (e.clientY - compDrag.sy) / plotH * (compDrag.syMax - compDrag.syMin);
+    compZoom.xMin = compDrag.sxMin + dx;
+    compZoom.xMax = compDrag.sxMax + dx;
+    if (compZoom.xMin < 0) { compZoom.xMax -= compZoom.xMin; compZoom.xMin = 0; }
+    if (compZoom.xMax > compXmax) { compZoom.xMin -= (compZoom.xMax - compXmax); compZoom.xMax = compXmax; }
+    if (compZoom.xMin < 0) compZoom.xMin = 0;
+    compZoom.yMin = compDrag.syMin + dy;
+    compZoom.yMax = compDrag.syMax + dy;
+    compSyncInputs();
+    drawComp();
+    return;
+  }
+  const r = compCanvas.getBoundingClientRect();
+  const [xLo, xHi] = compXrange();
+  compHoverX = Math.max(xLo, Math.min(xHi, (e.clientX - r.left - ML) / (W - ML - MR) * (xHi - xLo) + xLo));
+  drawComp();
+});
+window.addEventListener('mouseup', () => { if (typeof compDrag !== 'undefined' && compDrag) { compDrag = null; compCanvas.style.cursor = 'crosshair'; } });
+compCanvas.addEventListener('mouseleave', () => { if (typeof compDrag === 'undefined' || !compDrag) { compHoverX = null; drawComp(); } });
+
+compCanvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = compCanvas.getBoundingClientRect();
+  const plotW = W - ML - MR, plotH = H - MT - MB;
+  const mx = (e.clientX - r.left - ML) / plotW;
+  const my = (e.clientY - r.top - MT) / plotH;
+  const [ylo0, yhi0] = compYrange();
+  const factor = e.deltaY > 0 ? 1 / 1.15 : 1.15;
+  const xHi0 = compXrange()[1];
+  const scale = 1 - 1 / factor;
+
+  if (!e.shiftKey) {
+    const xLo0 = compZoom.xMin;
+    compZoom.xMin = xLo0 + mx * (xHi0 - xLo0) * scale;
+    compZoom.xMax = xHi0 - (1 - mx) * (xHi0 - xLo0) * scale;
+    if (compZoom.xMin < 0) { compZoom.xMax -= compZoom.xMin; compZoom.xMin = 0; }
+    if (compZoom.xMax > compXmax) { compZoom.xMin -= (compZoom.xMax - compXmax); compZoom.xMax = compXmax; }
+    if (compZoom.xMin < 0) compZoom.xMin = 0;
+  } else {
+    compZoom.yMin = ylo0 + (1 - my) * (yhi0 - ylo0) * scale;
+    compZoom.yMax = yhi0 - my * (yhi0 - ylo0) * scale;
+  }
+
+  compSyncInputs();
+  drawComp();
+}, { passive: false });
+
+document.getElementById('compXmin').addEventListener('change', e => { compZoom.xMin = parseFloat(e.target.value) || 0; compZoom.isDefault = false; drawComp(); });
+document.getElementById('compXmax').addEventListener('change', e => { compZoom.xMax = parseFloat(e.target.value) || compPassbandXmax; compZoom.isDefault = false; drawComp(); });
+document.getElementById('compYmin').addEventListener('change', e => { compZoom.yMin = parseFloat(e.target.value); compZoom.isDefault = false; drawComp(); });
+document.getElementById('compYmax').addEventListener('change', e => { compZoom.yMax = parseFloat(e.target.value); compZoom.isDefault = false; drawComp(); });
+document.getElementById('compResetZoom').onclick = () => { compZoom.xMin = 0; compZoom.xMax = null; compZoom.yMin = null; compZoom.yMax = null; compSyncInputs(); drawComp(); };
+document.getElementById('compCopyBtn').onclick = () => { const ta = document.getElementById('compCoeffOutput'); ta.select(); document.execCommand('copy'); };
+document.getElementById('compN').addEventListener('change', () => compDesign());
+document.getElementById('compD').addEventListener('change', () => compDesign());
+document.getElementById('compFmod').addEventListener('change', () => compDesign());
+document.getElementById('compOdr').addEventListener('change', () => compDesign());
+document.getElementById('compTaps').addEventListener('change', () => compDesign());
+document.getElementById('compWindow').addEventListener('change', () => compDesign());
+document.getElementById('compFpass').addEventListener('change', () => compDesign());
+document.getElementById('compFstop').addEventListener('change', () => compDesign());
+
 /* ========== Tab 切换 ========== */
 let currentTab = 'sinc';
 function switchTab(tab) {
   currentTab = tab;
   document.getElementById('navSinc').classList.toggle('active', tab === 'sinc');
   document.getElementById('navFir').classList.toggle('active', tab === 'fir');
+  document.getElementById('navComp').classList.toggle('active', tab === 'comp');
   document.getElementById('sincSection').style.display = tab === 'sinc' ? '' : 'none';
   document.getElementById('firSection').style.display = tab === 'fir' ? '' : 'none';
+  document.getElementById('compSection').style.display = tab === 'comp' ? '' : 'none';
   if (tab === 'fir') { drawPhasor(); drawFreqResp(); }
   if (tab === 'sinc') { resize(); drawPassband(); drawFullRange(); }
+  if (tab === 'comp') { compSyncSincFromMain(); compDesign(); }
 }
 document.getElementById('navSinc').onclick = () => switchTab('sinc');
 document.getElementById('navFir').onclick = () => switchTab('fir');
+document.getElementById('navComp').onclick = () => switchTab('comp');
 
 /* ========== FIR 偶对称 旋转向量 ========== */
 let phasorCoeffs = [1, 2, 1];
