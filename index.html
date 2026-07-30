@@ -93,12 +93,6 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
 .cascade-stage .stage-del{background:transparent;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:2px 6px;border-radius:4px;}
 .cascade-stage .stage-del:hover{color:var(--target);background:rgba(220,38,38,.1);}
 .cascade-info{font-size:12px;color:var(--dim);margin-top:8px;font-family:Consolas,monospace;}
-.snapshot-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;margin-bottom:4px;font-size:12px;}
-.snapshot-item:hover{border-color:var(--accent);}
-.snapshot-item .snap-color{width:12px;height:12px;border-radius:3px;flex-shrink:0;}
-.snapshot-item .snap-name{color:var(--txt);flex:1;background:transparent;border:none;font:inherit;font-weight:700;min-width:0;}
-.snapshot-item .snap-del{background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:14px;padding:2px 4px;border-radius:3px;}
-.snapshot-item .snap-del:hover{color:var(--target);background:rgba(220,38,38,.1);}
 .dual-view{display:grid;grid-template-columns:1fr;gap:16px;}
 </style>
 </head>
@@ -170,8 +164,6 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
         总抽取率 D<sub>total</sub> = <span id="totalDec">1</span>
         &nbsp;|&nbsp; ODR = f<sub>MOD</sub> / D<sub>total</sub> = <span id="cascadeODR">-</span> kHz
       </div>
-      <button class="ghost-btn" id="saveSnapshotBtn" style="margin-top:8px;font-size:12px;">📸 保存当前配置用于对比</button>
-      <div id="snapshotList" style="margin-top:8px;"></div>
     </div>
   </div>
 
@@ -338,17 +330,34 @@ footer{color:var(--dim);font-size:12px;text-align:center;margin:22px 0 6px;}
   <div class="panel controls">
     <div class="ctl-group">
       <label>FIR 长度</label>
-      <input type="number" id="compTaps" value="46" min="4" max="256" step="2" style="width:56px;">
+      <input type="number" id="compTaps" value="257" min="5" max="511" step="2" style="width:56px;">
       <span style="font-size:12px;color:var(--dim);">tap</span>
     </div>
     <div class="ctl-group">
+      <label>设计方法</label>
+      <select id="compMethod" style="width:110px;">
+        <option value="freqsampling" selected>频率采样</option>
+        <option value="wls">WLS</option>
+        <option value="irls">IRLS</option>
+      </select>
+    </div>
+    <div class="ctl-group" id="compWindowGroup">
       <label>窗函数</label>
-      <select id="compWindow" style="width:130px;">
+      <select id="compWindow" style="width:120px;">
         <option value="hamming" selected>Hamming</option>
         <option value="hanning">Hanning</option>
         <option value="blackman">Blackman</option>
         <option value="blackman-harris">Blackman-Harris</option>
       </select>
+    </div>
+    <div class="ctl-group" id="compWstopGroup" style="display:none;">
+      <label>阻带权重</label>
+      <input type="number" id="compWstop" value="10" min="0.1" max="1000" step="1" style="width:56px;">
+      <span style="font-size:11px;color:var(--dim);" title="仅影响 fStop 以上的阻带衰减，不影响通带补偿精度">仅控阻带</span>
+    </div>
+    <div class="ctl-group" id="compIterGroup" style="display:none;">
+      <label>迭代次数</label>
+      <input type="number" id="compIter" value="10" min="1" max="50" step="1" style="width:48px;">
     </div>
     <div class="ctl-group">
       <label>通带截止 f/f<sub>DATA</sub></label>
@@ -517,92 +526,6 @@ function renderCascadeUI() {
     };
   });
   document.getElementById('totalDec').textContent = totalDecimation();
-}
-
-/* ========== 级联快照对比 ========== */
-let cascadeSnapshots = [];
-const snapshotColors = ['#e11d48', '#f97316', '#16a34a', '#0ea5e9', '#a855f7', '#ec4899'];
-
-function computeSnapshotCurve(stages, xPoints, fRef) {
-  const pts = [];
-  for (const x of xPoints) {
-    const f = x * fRef;
-    let total = 0;
-    let fm = P.fMOD;
-    for (let si = 0; si < stages.length; si++) {
-      total += 20 * Math.log10(Math.max(sincN(f, stages[si].N, stages[si].D, fm), 1e-30));
-      fm /= stages[si].D;
-    }
-    pts.push(Math.max(total, Y_FLOOR));
-  }
-  return pts;
-}
-
-function saveSnapshot() {
-  if (!cascadeMode || sincStages.length === 0) return;
-  if (cascadeSnapshots.length >= snapshotColors.length) return;
-  const stagesCopy = sincStages.map(s => ({ N: s.N, D: s.D }));
-  const name = stagesCopy.map(s => `Sinc${s.N}×${s.D}`).join(' + ');
-  cascadeSnapshots.push({
-    name,
-    stages: stagesCopy,
-    color: snapshotColors[cascadeSnapshots.length],
-    visible: true
-  });
-  renderSnapshotList();
-  drawPassband();
-  drawFullRange();
-}
-
-function deleteSnapshot(idx) {
-  cascadeSnapshots.splice(idx, 1);
-  cascadeSnapshots.forEach((s, i) => s.color = snapshotColors[i]);
-  renderSnapshotList();
-  drawPassband();
-  drawFullRange();
-}
-
-function toggleSnapshot(idx) {
-  cascadeSnapshots[idx].visible = !cascadeSnapshots[idx].visible;
-  drawPassband();
-  drawFullRange();
-}
-
-function renderSnapshotList() {
-  const box = document.getElementById('snapshotList');
-  if (cascadeSnapshots.length === 0) { box.innerHTML = ''; return; }
-  box.innerHTML = cascadeSnapshots.map((s, i) =>
-    `<div class="snapshot-item">
-      <div class="snap-color" style="background:${s.color};"></div>
-      <span class="snap-name" style="color:${s.color};">${s.name}</span>
-      <label class="chk" style="margin:0;font-size:11px;">
-        <input type="checkbox" ${s.visible ? 'checked' : ''} data-idx="${i}" class="snap-toggle"> 显示
-      </label>
-      <button class="snap-del" data-idx="${i}" title="删除">×</button>
-    </div>`
-  ).join('');
-  box.querySelectorAll('.snap-toggle').forEach(cb => {
-    cb.onchange = function() { toggleSnapshot(parseInt(this.dataset.idx)); };
-  });
-  box.querySelectorAll('.snap-del').forEach(btn => {
-    btn.onclick = function() { deleteSnapshot(parseInt(this.dataset.idx)); };
-  });
-}
-
-function drawSnapshotCurves(ctx, xT, yT, xPoints, fRef, xLo, xHi) {
-  for (const snap of cascadeSnapshots) {
-    if (!snap.visible) continue;
-    const vals = computeSnapshotCurve(snap.stages, xPoints, fRef);
-    ctx.strokeStyle = snap.color; ctx.lineWidth = 2;
-    ctx.beginPath(); let started = false;
-    for (let i = 0; i < xPoints.length; i++) {
-      if (xPoints[i] < xLo || xPoints[i] > xHi) { started = false; continue; }
-      const px = xT(xPoints[i]), py = yT(vals[i]);
-      if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
-      if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
-    }
-    ctx.stroke();
-  }
 }
 
 /* ========== Sinc 计算 ========== */
@@ -804,11 +727,6 @@ function drawPassband() {
   }
   ctx.stroke();
 
-  if (cascadeMode && cascadeSnapshots.length > 0) {
-    const snapX = curve.map(p => p.x);
-    drawSnapshotCurves(ctx, xT, yT, snapX, P.ODR, xLo, xHi);
-  }
-
   KEY_FREQS.forEach(r => {
     if (r > maxX) return;
     const f = r * P.ODR;
@@ -895,7 +813,6 @@ function drawPassband() {
     }
   }
   ctx.restore();
-  updateLegend();
 }
 
 function p_stagesAtFreq(f, si) {
@@ -1012,11 +929,6 @@ function drawFullRange() {
   }
   ctx.stroke();
 
-  if (cascadeMode && cascadeSnapshots.length > 0) {
-    const snapX = pts.map(p => p.x);
-    drawSnapshotCurves(ctx, xPx, yPx, snapX, P.fMOD, xLo, xHi);
-  }
-
   ctx.textAlign = 'center';
   for (const z of zeros) {
     const px = xPx(z.x);
@@ -1092,7 +1004,6 @@ function drawFullRange() {
     ctx.fillStyle = C.sinc;
     ctx.fillText((cascadeMode ? '级联' : 'Sinc' + supNum(P.N)) + ' = ' + hDb.toFixed(4) + ' dB', tipX + 10, tipY + yOff);
   }
-  updateLegend();
 }
 
 function supNum(n) {
@@ -1429,23 +1340,27 @@ document.getElementById('stageInput').onchange = e => {
   P.N = Math.max(1, Math.min(10, parseInt(e.target.value) || 6));
   if (sincStages.length > 0) sincStages[0].N = P.N;
   updateKP(); drawPassband(); drawFullRange();
+  compSyncSincFromMain(); if (currentTab === 'comp') compDesign();
 };
 document.getElementById('decInput').onchange = e => {
   P.D = Math.max(2, Math.min(1000, parseInt(e.target.value) || 8));
   if (sincStages.length > 0) sincStages[0].D = P.D;
   syncODR();
   updateKP(); drawPassband(); drawFullRange();
+  compSyncSincFromMain(); if (currentTab === 'comp') compDesign();
 };
 document.getElementById('fmodInput').onchange = e => {
   P.fMOD = Math.max(1e3, Math.min(100e6, (parseFloat(e.target.value) || 8192) * 1e3));
   syncODR();
   updateKP(); drawPassband(); drawFullRange();
+  compSyncSincFromMain(); if (currentTab === 'comp') compDesign();
 };
 document.getElementById('odrInput').onchange = e => {
   P.ODR = Math.max(1, Math.min(10e6, parseInt(e.target.value) || 256000));
   P.D = Math.round(P.fMOD / P.ODR);
   document.getElementById('decInput').value = P.D;
   updateKP(); drawPassband(); drawFullRange();
+  compSyncSincFromMain(); if (currentTab === 'comp') compDesign();
 };
 document.getElementById('showComp').onchange = e => { P.showComp = e.target.checked; drawPassband(); };
 document.getElementById('themeToggle').onclick = toggleTheme;
@@ -1490,8 +1405,6 @@ document.getElementById('addStageBtn').onclick = function() {
   updateKP(); drawPassband(); drawFullRange();
 };
 
-document.getElementById('saveSnapshotBtn').onclick = saveSnapshot;
-
 function updateLegend() {
   const pbLegend = document.getElementById('passbandLegend');
   const frLegend = document.getElementById('fullrangeLegend');
@@ -1506,17 +1419,9 @@ function updateLegend() {
     pbHTML += `<span><i class="sw" style="background:var(--sinc);"></i><b style="color:var(--sinc);">级联总响应</b></span>`;
     pbHTML += `<span><i class="sw" style="background:var(--target);"></i><b style="color:var(--target);">补偿目标</b></span>`;
     pbHTML += `<span><i class="sw" style="background:var(--comp);"></i><b style="color:var(--comp);">0 dB</b></span>`;
-    for (const snap of cascadeSnapshots) {
-      if (!snap.visible) continue;
-      pbHTML += `<span><i class="sw" style="background:${snap.color};"></i><b style="color:${snap.color};font-size:11px;">${snap.name}</b></span>`;
-    }
     pbHTML += `<span><b style="color:var(--accent);">│</b> 游标</span>`;
     frHTML += `<span><i class="sw" style="background:var(--sinc);"></i><b style="color:var(--sinc);">级联总响应</b></span>`;
     frHTML += `<span><i class="sw" style="background:#0891b2;border-top:2px dashed #0891b2;height:0;"></i><b style="color:#0891b2;">零点</b></span>`;
-    for (const snap of cascadeSnapshots) {
-      if (!snap.visible) continue;
-      frHTML += `<span><i class="sw" style="background:${snap.color};"></i><b style="color:${snap.color};font-size:11px;">${snap.name}</b></span>`;
-    }
     frHTML += `<span><b style="color:var(--accent);">│</b> 游标</span>`;
     pbLegend.innerHTML = pbHTML;
     frLegend.innerHTML = frHTML;
@@ -1540,8 +1445,8 @@ let compCoeffs = [];
 let compHoverX = null;
 let compTargetDBCache = [];
 let compFIRDBCache = [];
-let compXmax = 0.5;
-let compPassbandXmax = 0.45;
+let compXmax = 0.55;
+let compPassbandXmax = Math.min(6 / 8, 0.55);
 let compYmin = -30, compYmax = 10;
 
 const compZoom = { xMin: 0, xMax: null, yMin: null, yMax: null, isDefault: true };
@@ -1591,54 +1496,231 @@ function compFreqResp(coeffs, fNorm) {
   return Math.sqrt(re * re + im * im);
 }
 
+// ─── 补偿器设计（WLS / IRLS / 频率采样）───────────────────
+// Type II 线性相位 FIR：h[n]=h[N-1-n]，只解 M=N/2 个未知数
+
+function normalizeDC(h) {
+  let dc = 0;
+  for (let n = 0; n < h.length; n++) dc += h[n];
+  if (Math.abs(dc) > 1e-15) for (let n = 0; n < h.length; n++) h[n] /= dc;
+}
+
+function wlsCompDesign(nTaps, fPass, fStop, wStop, maxIter) {
+  return wlsCore(nTaps, fPass, fStop, wStop, maxIter, false);
+}
+
+function irlsCompDesign(nTaps, fPass, fStop, wStop, maxIter) {
+  return wlsCore(nTaps, fPass, fStop, wStop, maxIter, true);
+}
+
+function wlsCore(nTaps, fPass, fStop, wStop, maxIter, doIRLS) {
+  const NN = P.N, DD = P.D;
+  const edgeGain = 1 / Math.max(sincN(fPass * P.fMOD / P.D, NN, DD, P.fMOD), 1e-15);
+  const maxGain = Math.min(edgeGain, 200);
+
+  function desiredAt(fNorm) {
+    const f = fNorm * P.fMOD / P.D;
+    if (fNorm <= fPass) return Math.min(1 / Math.max(sincN(f, NN, DD, P.fMOD), 1e-15), maxGain);
+    if (fNorm < fStop) return edgeGain * (1 - (fNorm - fPass) / (fStop - fPass));
+    return 0;
+  }
+
+  // Type-I linear phase: odd length, h[n] = h[L-1-n].
+  const L = nTaps % 2 ? nTaps : nTaps + 1;
+  const order = (L - 1) / 2;
+  const nFreq = Math.max(8 * L, 2048);
+  const freqs = new Float64Array(nFreq);
+  const target = new Float64Array(nFreq);
+  const baseWeights = new Float64Array(nFreq);
+  const weights = new Float64Array(nFreq);
+  for (let k = 0; k < nFreq; k++) {
+    freqs[k] = (k + 0.5) / nFreq * 0.5;
+    target[k] = desiredAt(freqs[k]);
+    const base = freqs[k] <= fPass ? 1 : (freqs[k] < fStop ? 0.1 : wStop);
+    baseWeights[k] = base;
+    // The displayed metric is dB ripple, so use relative amplitude error in-band.
+    weights[k] = freqs[k] <= fPass ? base / Math.max(target[k] * target[k], 1e-12) : base;
+  }
+
+  let a = new Float64Array(order + 1);
+  a[0] = 1;
+
+  for (let iter = 0; iter < maxIter; iter++) {
+    const G = Array.from({ length: order + 1 }, () => new Float64Array(order + 1));
+    const b = new Float64Array(order + 1);
+
+    for (let k = 0; k < nFreq; k++) {
+      const f = freqs[k], wk = weights[k], d = target[k];
+      const basis = new Float64Array(order + 1);
+      basis[0] = 1;
+      for (let i = 1; i <= order; i++) basis[i] = 2 * Math.cos(2 * Math.PI * f * i);
+      for (let i = 0; i <= order; i++) {
+        b[i] += wk * d * basis[i];
+        for (let j = i; j <= order; j++) G[i][j] += wk * basis[i] * basis[j];
+      }
+    }
+    for (let i = 0; i <= order; i++)
+      for (let j = 0; j < i; j++) G[i][j] = G[j][i];
+    for (let i = 0; i <= order; i++) G[i][i] += 1e-8;
+
+    a = solveCholesky(G, b);
+    if (a === null) break;
+
+    if (!doIRLS) break;
+
+    const hFull = typeItoFull(a, L);
+    const resp = new Float64Array(nFreq);
+    for (let k = 0; k < nFreq; k++) resp[k] = compFreqResp(hFull, freqs[k]);
+
+    let maxErr = 0;
+    for (let k = 0; k < nFreq; k++) {
+      if (freqs[k] > fPass) break;
+      const err = Math.abs(resp[k] - target[k]);
+      if (err > maxErr) maxErr = err;
+    }
+
+    for (let k = 0; k < nFreq; k++) {
+      if (freqs[k] <= fPass) {
+        const relativeError = Math.abs(resp[k] - target[k]) / Math.max(target[k], 1e-12);
+        const requested = baseWeights[k] * Math.max(relativeError, 1e-4);
+        weights[k] = 0.5 * weights[k] + 0.5 * requested;
+      } else {
+        weights[k] = baseWeights[k];
+      }
+    }
+    let wSum = 0, cnt = 0;
+    for (let k = 0; k < nFreq; k++) {
+      if (freqs[k] <= fPass) { wSum += weights[k]; cnt++; }
+    }
+    if (cnt > 0) { const avg = wSum / cnt; for (let k = 0; k < nFreq; k++) weights[k] /= avg; }
+    if (maxErr < 0.001) break;
+  }
+
+  const h = typeItoFull(a, L);
+  normalizeDC(h);
+  return Array.from(h);
+}
+
+function typeItoFull(a, nTaps) {
+  const h = new Float64Array(nTaps);
+  const order = (nTaps - 1) / 2;
+  h[order] = a[0];
+  for (let i = 1; i <= order; i++) {
+    h[order - i] = a[i];
+    h[order + i] = a[i];
+  }
+  return h;
+}
+
+function solveCholesky(A, b) {
+  const n = b.length;
+  const L = Array.from({ length: n }, () => new Float64Array(n));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = 0;
+      for (let k = 0; k < j; k++) s += L[i][k] * L[j][k];
+      if (i === j) {
+        const diag = A[i][i] - s;
+        if (diag <= 1e-20) return null;
+        L[i][j] = Math.sqrt(diag);
+      } else {
+        L[i][j] = (A[i][j] - s) / L[j][j];
+      }
+    }
+  }
+  const y = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    let s = 0;
+    for (let k = 0; k < i; k++) s += L[i][k] * y[k];
+    y[i] = (b[i] - s) / L[i][i];
+  }
+  const x = new Float64Array(n);
+  for (let i = n - 1; i >= 0; i--) {
+    let s = 0;
+    for (let k = i + 1; k < n; k++) s += L[k][i] * x[k];
+    x[i] = (y[i] - s) / L[i][i];
+  }
+  return x;
+}
+
 function compDesign() {
   compSyncSincToMain();
-  const nTaps = parseInt(document.getElementById('compTaps').value) || 46;
-  const winType = document.getElementById('compWindow').value;
+  const requestedTaps = parseInt(document.getElementById('compTaps').value) || 257;
+  const nTaps = requestedTaps % 2 ? requestedTaps : requestedTaps + 1;
   const fPass = parseFloat(document.getElementById('compFpass').value) || 0.433;
   const fStop = parseFloat(document.getElementById('compFstop').value) || 0.5;
   const N = P.N, D = P.D;
+  const method = document.getElementById('compMethod').value;
 
-  const M = 1024;
-  const h = new Float64Array(nTaps);
-  for (let n = 0; n < nTaps; n++) {
-    let sum = 0;
-    for (let k = 0; k < M; k++) {
-      const fNorm = k / M * 0.5;
-      const f = fNorm * P.fMOD;
-      let target;
+  if (method === 'freqsampling') {
+    const winType = document.getElementById('compWindow').value;
+    const M = Math.max(4 * nTaps, 2048);
+    const halfM = M / 2;
+    const edgeGain = 1 / Math.max(sincN(fPass * P.fMOD / P.D, N, D, P.fMOD), 1e-15);
+    const maxGain = Math.min(edgeGain, 200);
+
+    const spec = new Float64Array(M);
+    for (let k = 0; k <= halfM; k++) {
+      const fNorm = k / M;
+      const f = fNorm * P.fMOD / P.D;
       if (fNorm <= fPass) {
-        target = 1.0 / Math.max(sincN(f, N, D, P.fMOD), 1e-15);
+        spec[k] = Math.min(1.0 / Math.max(sincN(f, N, D, P.fMOD), 1e-15), maxGain);
       } else if (fNorm < fStop) {
         const t = (fNorm - fPass) / (fStop - fPass);
-        const compAtEdge = 1.0 / Math.max(sincN(fPass * P.fMOD, N, D, P.fMOD), 1e-15);
-        target = compAtEdge * (1 - t);
+        spec[k] = edgeGain * (1 - t);
       } else {
-        target = 0;
+        spec[k] = 0;
       }
-      const phase = -Math.PI * fNorm * (nTaps - 1);
-      sum += target * Math.cos(phase);
     }
-    h[n] = 2 * sum / M;
+    for (let k = halfM + 1; k < M; k++) spec[k] = spec[M - k];
+
+    const hFull = new Float64Array(M);
+    for (let n = 0; n < M; n++) {
+      let sum = 0;
+      for (let k = 0; k < M; k++) {
+        sum += spec[k] * Math.cos(2 * Math.PI * k * n / M);
+      }
+      hFull[n] = sum / M;
+    }
+
+    const order = Math.floor(nTaps / 2);
+    const h = new Float64Array(nTaps);
+    h[order] = hFull[0];
+    for (let i = 1; i <= order; i++) {
+      h[order - i] = hFull[i];
+      h[order + i] = hFull[M - i];
+    }
+
+    const win = new Float64Array(nTaps);
+    for (let n = 0; n < nTaps; n++) win[n] = compWindowFn(winType, n, nTaps);
+    for (let n = 0; n < nTaps; n++) h[n] *= win[n];
+    normalizeDC(h);
+    compCoeffs = Array.from(h);
+
+  } else if (method === 'wls') {
+    const wStop = parseFloat(document.getElementById('compWstop').value) || 10;
+    compCoeffs = wlsCompDesign(nTaps, fPass, fStop, wStop, 10);
+
+  } else if (method === 'irls') {
+    const wStop = parseFloat(document.getElementById('compWstop').value) || 10;
+    const maxIter = parseInt(document.getElementById('compIter').value) || 10;
+    compCoeffs = irlsCompDesign(nTaps, fPass, fStop, wStop, maxIter);
   }
-  const win = new Float64Array(nTaps);
-  for (let n = 0; n < nTaps; n++) win[n] = compWindowFn(winType, n, nTaps);
-  for (let n = 0; n < nTaps; n++) h[n] *= win[n];
-  const dcGain = h.reduce((a, b) => a + b, 0);
-  for (let n = 0; n < nTaps; n++) h[n] /= dcGain;
-  compCoeffs = Array.from(h);
 
   document.getElementById('compCoeffOutput').value = compCoeffs.map(c => c.toFixed(8)).join(', ');
 
-  let passRipple = 0, stopAtten = -Infinity;
+  let passRipple = 0, passMax = -Infinity, passMin = Infinity;
   for (let k = 1; k <= 200; k++) {
     const fNorm = k / 400 * fPass;
-    const f = fNorm * P.fMOD;
-    const resp = compFreqResp(compCoeffs, fNorm);
-    const target = 1.0 / Math.max(sincN(f, N, D, P.fMOD), 1e-15);
-    const err = Math.abs(20 * Math.log10(Math.max(resp * target, 1e-30)));
-    if (err > passRipple) passRipple = err;
+    const f = fNorm * P.fMOD / P.D;
+    const sincV = sincN(f, N, D, P.fMOD);
+    const firV = compFreqResp(compCoeffs, fNorm);
+    const combinedDB = 20 * Math.log10(Math.max(sincV * firV, 1e-30));
+    if (combinedDB > passMax) passMax = combinedDB;
+    if (combinedDB < passMin) passMin = combinedDB;
   }
+  passRipple = passMax - passMin;
+  let stopAtten = -Infinity;
   for (let k = 0; k <= 200; k++) {
     const fNorm = fStop + k / 200 * (0.5 - fStop);
     const resp = compFreqResp(compCoeffs, fNorm);
@@ -1647,12 +1729,12 @@ function compDesign() {
   }
   const dcG = compCoeffs.reduce((a, b) => a + b, 0);
   document.getElementById('compKPGrid').innerHTML =
-    `<div class="kp-item"><div class="freq">通带纹波</div><div class="val">${passRipple < 0.001 ? '<0.001' : passRipple.toFixed(3)} mdB</div></div>` +
-    `<div class="kp-item"><div class="freq">阻带衰减</div><div class="val" style="color:${Math.abs(stopAtten) > 100 ? 'var(--comp)' : 'var(--target)'};">${stopAtten.toFixed(1)} dB</div></div>` +
+    `<div class="kp-item"><div class="freq">通带纹波</div><div class="val">${passRipple.toFixed(6)} dB</div></div>` +
+    `<div class="kp-item"><div class="freq">通带最大偏差</div><div class="val" style="color:${Math.abs(passMax) > 0.5 || Math.abs(passMin) > 0.5 ? 'var(--target)' : 'var(--comp)'};">${passMin.toFixed(2)} ~ ${passMax.toFixed(2)} dB</div></div>` +
     `<div class="kp-item"><div class="freq">DC 增益</div><div class="val">${dcG.toFixed(6)}</div></div>` +
     `<div class="kp-item"><div class="freq">系数数量</div><div class="val">${nTaps} tap</div></div>`;
 
-  compPassbandXmax = Math.min(fPass + 0.02, 0.5);
+  compPassbandXmax = Math.min(6 / P.D, 0.55);
   compAutoYRange();
   compZoom.xMin = 0; compZoom.xMax = null; compZoom.yMin = null; compZoom.yMax = null;
   compSyncInputs();
@@ -1666,7 +1748,7 @@ function compAutoYRange() {
   let ylo = Infinity, yhi = -Infinity;
   for (let k = 0; k <= PASS_PTS; k++) {
     const fNorm = (k / PASS_PTS) * fPass;
-    const f = fNorm * P.fMOD;
+    const f = fNorm * P.fMOD / P.D;
     if (compCoeffs.length > 0) {
       const sincV = sincN(f, N, D, P.fMOD);
       const firV = compFreqResp(compCoeffs, fNorm);
@@ -1678,12 +1760,11 @@ function compAutoYRange() {
       if (firDB > yhi) yhi = firDB;
     }
   }
-  if (ylo === Infinity) { compYmin = -10; compYmax = 5; return; }
-  const margin = Math.max(2, (yhi - ylo) * 0.25);
-  compYmin = Math.floor((ylo - margin) / 2) * 2;
-  compYmax = Math.ceil((yhi + margin) / 2) * 2;
-  if (compYmax < 3) compYmax = 3;
-  if (compYmin > -3) compYmin = -3;
+  if (ylo === Infinity) { compYmin = -30; compYmax = 10; return; }
+  const margin = Math.max(3, (yhi - ylo) * 0.2);
+  compYmin = Math.floor((ylo - margin) / 5) * 5;
+  compYmax = Math.ceil((yhi + margin) / 5) * 5;
+  if (compYmax < 5) compYmax = 5;
 }
 
 function compSyncInputs() {
@@ -1730,7 +1811,8 @@ function drawComp() {
     const py = yT(db);
     if (py < MT || py > H - MB) continue;
     ctx.beginPath(); ctx.moveTo(ML, py); ctx.lineTo(ML + (W - ML - MR), py); ctx.stroke();
-    ctx.fillText(db.toFixed(dbStep < 1 ? 1 : 0) + ' dB', ML - 8, py + 4);
+     const dbDigits = dbStep < 1 ? 3 : (dbStep < 10 ? 1 : 0);
+     ctx.fillText(db.toFixed(dbDigits) + ' dB', ML - 8, py + 4);
   }
   ctx.fillText('f / fDATA', ML + (W - ML - MR) / 2, H - 2);
 
@@ -1740,7 +1822,7 @@ function drawComp() {
   ctx.clip();
 
   if (0 >= yLo && 0 <= yHi_) {
-    ctx.strokeStyle = C.comp; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = C.dim; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
     ctx.beginPath(); ctx.moveTo(ML, yT(0)); ctx.lineTo(ML + (W - ML - MR), yT(0)); ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -1749,11 +1831,11 @@ function drawComp() {
   compTargetDBCache = [];
   compFIRDBCache = [];
 
-  ctx.strokeStyle = C.target; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = C.target; ctx.lineWidth = 2;
   ctx.beginPath(); let started = false;
   for (let i = 0; i <= nPts; i++) {
     const fNorm = xLo + (i / nPts) * (xHi - xLo);
-    const f = fNorm * P.fMOD;
+    const f = fNorm * P.fMOD / P.D;
     const targetDB = -sincN_dB(f);
     compTargetDBCache.push(targetDB);
     const py = yT(targetDB);
@@ -1761,7 +1843,7 @@ function drawComp() {
     if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
     if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
   }
-  ctx.stroke(); ctx.setLineDash([]);
+  ctx.stroke();
 
   if (compCoeffs.length > 0) {
     ctx.strokeStyle = C.sinc; ctx.lineWidth = 2.5;
@@ -1779,11 +1861,28 @@ function drawComp() {
     ctx.stroke();
   }
 
+  if (compCoeffs.length > 0) {
+    ctx.strokeStyle = C.comp; ctx.lineWidth = 2;
+    ctx.beginPath(); started = false;
+    for (let i = 0; i <= nPts; i++) {
+      const fNorm = xLo + (i / nPts) * (xHi - xLo);
+      const f = fNorm * P.fMOD / P.D;
+      const sincV = sincN(f, P.N, P.D, P.fMOD);
+      const firV = compFreqResp(compCoeffs, fNorm);
+      const combinedDB = 20 * Math.log10(Math.max(sincV * firV, 1e-30));
+      const py = yT(combinedDB);
+      const px = xT(fNorm);
+      if (py < MT - 5 || py > H - MB + 5) { started = false; continue; }
+      if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  }
+
   ctx.restore();
 
   if (compHoverX !== null && compHoverX >= xLo && compHoverX <= xHi) {
     const hx = xT(compHoverX);
-    const hf = compHoverX * P.fMOD;
+    const hf = compHoverX * P.fMOD / P.D;
     ctx.strokeStyle = isDark ? 'rgba(121,192,255,.4)' : 'rgba(37,99,235,.3)';
     ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(hx, MT); ctx.lineTo(hx, H - MB); ctx.stroke(); ctx.setLineDash([]);
@@ -1882,14 +1981,26 @@ document.getElementById('compYmin').addEventListener('change', e => { compZoom.y
 document.getElementById('compYmax').addEventListener('change', e => { compZoom.yMax = parseFloat(e.target.value); compZoom.isDefault = false; drawComp(); });
 document.getElementById('compResetZoom').onclick = () => { compZoom.xMin = 0; compZoom.xMax = null; compZoom.yMin = null; compZoom.yMax = null; compSyncInputs(); drawComp(); };
 document.getElementById('compCopyBtn').onclick = () => { const ta = document.getElementById('compCoeffOutput'); ta.select(); document.execCommand('copy'); };
-document.getElementById('compN').addEventListener('change', () => compDesign());
-document.getElementById('compD').addEventListener('change', () => compDesign());
-document.getElementById('compFmod').addEventListener('change', () => compDesign());
-document.getElementById('compOdr').addEventListener('change', () => compDesign());
-document.getElementById('compTaps').addEventListener('change', () => compDesign());
+document.getElementById('compN').addEventListener('input', () => compDesign());
+document.getElementById('compD').addEventListener('input', () => compDesign());
+document.getElementById('compFmod').addEventListener('input', () => compDesign());
+document.getElementById('compOdr').addEventListener('input', () => compDesign());
+document.getElementById('compTaps').addEventListener('input', () => compDesign());
 document.getElementById('compWindow').addEventListener('change', () => compDesign());
-document.getElementById('compFpass').addEventListener('change', () => compDesign());
-document.getElementById('compFstop').addEventListener('change', () => compDesign());
+document.getElementById('compFpass').addEventListener('input', () => compDesign());
+document.getElementById('compFstop').addEventListener('input', () => compDesign());
+
+function compUpdateMethodUI() {
+  const m = document.getElementById('compMethod').value;
+  document.getElementById('compWindowGroup').style.display = (m === 'freqsampling') ? '' : 'none';
+  document.getElementById('compWstopGroup').style.display = (m !== 'freqsampling') ? '' : 'none';
+  document.getElementById('compIterGroup').style.display = (m === 'irls') ? '' : 'none';
+  compDesign();
+}
+document.getElementById('compMethod').addEventListener('change', compUpdateMethodUI);
+document.getElementById('compWstop').addEventListener('input', () => compDesign());
+document.getElementById('compIter').addEventListener('input', () => compDesign());
+compUpdateMethodUI();
 
 /* ========== Tab 切换 ========== */
 let currentTab = 'sinc';
